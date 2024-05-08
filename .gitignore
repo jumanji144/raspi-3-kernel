@@ -1,0 +1,8 @@
+kernel.elf
+kernel.map
+kernel8.img
+disasm.txt
+.gdb_history
+build/
+.vscode/
+*.o
