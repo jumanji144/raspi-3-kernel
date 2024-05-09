@@ -55,7 +55,7 @@ If you want to do it yourself, follow these instructions:
 - Create a MBR partition table on the SD Card
 - Create a primary partition with the type 0x0c (FAT32)
 - Format the partition with FAT32
-- Download bootcode.bin, start.elf and fixup.dat from the (raspberry pi firmware repository)[https://github.com/raspberrypi/firmware/tree/master/boot]
+- Download bootcode.bin, start.elf and fixup.dat from the [raspberry pi firmware repository](https://github.com/raspberrypi/firmware/tree/master/boot)
 - Put the kernel8.img file in the root of the partition
 
 Here is a linux script to do it:
