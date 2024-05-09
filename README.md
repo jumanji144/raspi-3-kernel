@@ -25,13 +25,18 @@ My plans for this kernel are:
 
 ### Prerequisites
 Firstly you need to have build-devel installed to have the base tools to build a application.
-You will need a cross compiler for aarch64, atleast the gcc and binutils packages.
+You will need a cross-compiler for aarch64, atleast the gcc and binutils packages.
 
 ### Creating the image
 To create the image you will need to run the following commands:
 ```bash
-make all
+mkdir build -p
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/toolchian.cmake -DTOOLCHAIN_PATH=/path/to/toolchain
 ```
+(TOOLCHAIN_PATH is not needed when the toolchain is in your path)
+((TOOLCHAIN_PATH must point to the root of the toolchain, not the bin directory))
+
+This will create the image and copy the kernel8.img and the kernel8.elf to the root of the project.
 
 ### Running the image
 To run the image either run it in qemu via:
