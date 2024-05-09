@@ -3,17 +3,19 @@ set(TOOLCHAIN aarch64-elf)
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR BCM2837)
 
-IF ($TOOLCHAIN_PATH)
-    STRING(APPEND TOOLCHAIN_PATH "/")
-ENDIF ()
+# if toolchain path exists, append /bin/ to it
+if(EXISTS ${TOOLCHAIN_PATH})
+    set(TOOLCHAIN_PATH ${TOOLCHAIN_PATH}/bin/)
+endif()
 
 
-set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}/bin/aarch64-elf-gcc)
-set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PATH}/bin/aarch64-elf-g++)
+set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}aarch64-elf-gcc)
+set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PATH}aarch64-elf-g++)
 
-set(CMAKE_OBJCOPY ${TOOLCHAIN_PATH}/bin/aarch64-elf-objcopy
+set(CMAKE_OBJCOPY ${TOOLCHAIN_PATH}aarch64-elf-objcopy
     CACHE FILEPATH "objcopy tool" FORCE)
-set(CMAKE_OBJDUMP ${TOOLCHAIN_PATH}/bin/aarch64-elf-objdump)
+set(CMAKE_OBJDUMP ${TOOLCHAIN_PATH}aarch64-elf-objdump
+    CACHE FILEPATH "objdump tool" FORCE)
 
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
