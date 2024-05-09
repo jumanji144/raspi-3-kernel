@@ -71,7 +71,7 @@ _start:
 1:  ldr     x4, [x3], #8
     str     x4, [x1], #8
     cmp     x1, x2
-    bne     1b
+    blo     1b
 
     // zero bss section
     ldr     x1, =__bss_start__
@@ -79,7 +79,7 @@ _start:
 
 1:  str     xzr, [x1], #8
     cmp     x1, x2
-    bne     1b
+    blo     1b
 
 4:  bl      kernel_main
 

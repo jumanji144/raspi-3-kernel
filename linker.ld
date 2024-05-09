@@ -1,8 +1,8 @@
 ENTRY(_start)
 
 MEMORY {
-    FLASH (rx) : ORIGIN = 0x80000, LENGTH = 50k
-    RAM (rwx) : ORIGIN = 0x200000, LENGTH = 30M
+    FLASH (rx) : ORIGIN = 0x80000, LENGTH = 100k
+    RAM (rwx) : ORIGIN = 0x300000, LENGTH = 30M
 }
 
 SECTIONS
