@@ -7,7 +7,7 @@ using namespace mailbox;
 gpu::buffer gpu::get_framebuffer(u32 width, u32 height, u32 depth) {
     u8 bytes_per_pixel = depth / 8;
 
-    property_message<framebuffer::physical_dimensions_request<command_type::set>> physical_dimensions(width, height);
+    /*property_message<framebuffer::physical_dimensions_request<command_type::set>> physical_dimensions(width, height);
     property_message<framebuffer::virtual_dimensions_request<command_type::set>> virtual_dimensions(width, height);
     property_message<framebuffer::depth_request<command_type::set>> depth_request(depth);
     property_message<framebuffer::allocate_buffer_request> allocate_framebuffer(16);
@@ -22,7 +22,7 @@ gpu::buffer gpu::get_framebuffer(u32 width, u32 height, u32 depth) {
 
     return {physical_dimension.width, physical_dimension.height, physical_dimension.width * bytes_per_pixel,
             (pixel*)(uintptr_t) allocate_buffer_response.address, allocate_buffer_response.size,
-            physical_dimension.width / 8, physical_dimension.height / 8, 0, 0 };
+            physical_dimension.width / 8, physical_dimension.height / 8, 0, 0 };*/
 }
 
 void gpu::buffer::putc(char c) {
