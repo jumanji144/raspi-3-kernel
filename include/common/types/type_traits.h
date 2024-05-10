@@ -99,5 +99,120 @@ namespace type {
     template <typename T>
     inline constexpr bool is_default_constructible_v = __is_constructible(T);
 
+    // remove_reference
+    template <typename T>
+    struct remove_reference {
+        using type = T;
+    };
+
+    template <typename T>
+    struct remove_reference<T&> {
+        using type = T;
+    };
+
+    template <typename T>
+    struct remove_reference<T&&> {
+        using type = T;
+    };
+
+    template <typename T>
+    using remove_reference_t = typename remove_reference<T>::type;
+
+    template <typename T>
+    struct remove_cv {
+        using type = T;
+    };
+
+    template <typename T>
+    struct remove_cv<const T> {
+        using type = T;
+    };
+
+    template <typename T>
+    struct remove_cv<volatile T> {
+        using type = T;
+    };
+
+    template <typename T>
+    struct remove_cv<const volatile T> {
+        using type = T;
+    };
+
+    template <typename T>
+    using remove_cv_t = typename remove_cv<T>::type;
+
+    template<typename>
+    struct _is_integral_helper
+            : public false_type { };
+
+    template<>
+    struct _is_integral_helper<bool>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<char>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<signed char>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<unsigned char>
+            : public true_type { };
+
+    // We want is_integral<wchar_t> to be true (and make_signed/unsigned to work)
+    // even when libc doesn't provide working <wchar.h> and related functions,
+    // so don't check _GLIBCXX_USE_WCHAR_T here.
+    template<>
+    struct _is_integral_helper<wchar_t>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<char16_t>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<char32_t>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<short>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<unsigned short>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<int>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<unsigned int>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<long>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<unsigned long>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<long long>
+            : public true_type { };
+
+    template<>
+    struct _is_integral_helper<unsigned long long>
+            : public true_type { };
+
+    template<typename T>
+    struct is_integral : public _is_integral_helper<T> { };
+
+    template <typename T>
+    concept integral = is_integral<T>::value;
+
 
 }

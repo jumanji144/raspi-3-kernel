@@ -2,6 +2,9 @@
 #include "common.h"
 #include "peripheral.h"
 #include "gpio.h"
+#include "common/string.h"
+#include "common/format.h"
+#include "common/utility.h"
 
 namespace uart {
 
@@ -25,6 +28,13 @@ namespace uart {
     void write(char c);
     void write(const char* str);
     void write(uint64_t value, u8 base = 10, u8 width = 0);
+    template <typename... Args>
+    void write(const char* fmt, Args... args) {
+        char buffer[256];
+        str::string str = { buffer, sizeof(buffer) };
+        str::format(str, fmt, util::forward<Args>(args)...);
+        write(buffer);
+    }
     char read();
 
 }

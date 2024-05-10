@@ -17,7 +17,9 @@ add_executable(raspi
         src/kernel/mailbox.cpp
         src/kernel/buffer.cpp
         src/kernel/gpu.cpp
+        src/common/format.cpp
 )
+
 include_directories(include)
 
 target_link_options(raspi PRIVATE
