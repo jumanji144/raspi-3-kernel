@@ -78,14 +78,14 @@ namespace emmc {
 
         bool setup_hc_transfer(u32 blocks);
 
-        alignas(sizeof(u64)) reg::scr scr{};
-
         bool v2 = false;
         bool high_capacity = false;
 
         u16 ocr = 0;
         u8 cid[16]{};
         u32 relative_card_address = 0;
+
+        alignas(8) reg::scr scr{};
     };
 
 }
