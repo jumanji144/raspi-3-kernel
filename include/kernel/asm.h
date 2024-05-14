@@ -76,8 +76,24 @@ static inline void sp_el1(u64 sp) {
     asm volatile("msr sp_el1, %0" : : "r"(sp));
 }
 
+static inline u64 cntfrq_el0() {
+    u64 cntfrq;
+    asm volatile("mrs %0, cntfrq_el0" : "=r"(cntfrq));
+    return cntfrq;
+}
+
+static inline u64 cntpct_el0() {
+    u64 cntpct;
+    asm volatile("mrs %0, cntpct_el0" : "=r"(cntpct));
+    return cntpct;
+}
+
 static inline void eret() {
     asm volatile("eret");
+}
+
+static inline void nop() {
+    asm volatile("nop");
 }
 
 static inline void halt() {

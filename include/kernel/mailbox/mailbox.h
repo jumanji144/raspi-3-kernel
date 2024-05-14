@@ -105,6 +105,7 @@ namespace mailbox {
 
         template<tag_type Tag>
         Tag get_tag() const {
+            static_assert(type::is_present_v<Tag, Tags...>, "Tag not found");
             size_t size = 0;
             ((!type::is_same_v<Tag, Tags>
                     && (size += (align_up(sizeof(Tags), sizeof(u32)) / sizeof(u32)), true)) && ...);

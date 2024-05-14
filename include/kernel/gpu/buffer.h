@@ -3,11 +3,12 @@
 #include <kernel/gpu/font.h>
 
 namespace gpu {
-    struct pixel {
+    struct [[gnu::packed]] pixel {
         u8 r;
         u8 g;
         u8 b;
-    } __attribute__((packed));
+        u8 a;
+    };
 
     struct buffer {
         u32 width;
@@ -29,13 +30,21 @@ namespace gpu {
             return data[y * width + x];
         }
 
-        pixel& pxl(u32 x, u32 y) {
+        [[nodiscard]] pixel& pxl(u32 x, u32 y) const {
             return data[y * width + x];
         }
 
         void putc(char c);
         void puts(const char* str);
+
+        void clear(pixel color) const {
+            for (u32 y = 0; y < height; y++) {
+                for (u32 x = 0; x < width; x++) {
+                    pxl(x, y) = color;
+                }
+            }
+        }
     };
 
-    buffer get_framebuffer(u32 width, u32 height, u32 depth);
+    buffer allocate_framebuffer(u32 width, u32 height, u32 depth);
 }

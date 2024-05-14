@@ -1,6 +1,8 @@
 #include <kernel/main.h>
 #include <kernel/peripheral/uart1.h>
 #include <kernel/mailbox/board.h>
+#include <kernel/gpu/buffer.h>
+#include <kernel/peripheral/sd.h>
 
 void print_board_info() {
     mailbox::property_message<board::serial_request, board::firmware_revision_request, board::board_model_request,
@@ -27,14 +29,36 @@ void print_board_info() {
 }
 extern "C" void kernel_main(u64 dtb_ptr32)
 {
+    using mailbox::command_type::set, mailbox::command_type::get;
 
     (void) dtb_ptr32;
 
     uart::init();
 
-    print_board_info();
+    constexpr gpu::pixel cyan = {51, 255, 189};
 
-    while (true) {
-        uart::write(uart::read());
+    uart::write("Hello, world!\n");
+
+    gpu::buffer buffer = gpu::allocate_framebuffer(1024, 768, 32);
+
+    buffer.clear({ 0, 0, 0 });
+
+    buffer.puts("Hello, world!");
+
+    emmc::sd sd;
+
+    if(!sd.init()) {
+        uart::write("Failed to initialize SD card\n");
+        return;
     }
+
+    u8 buf[512];
+    sd.transfer_data(0, buf, 1, false);
+
+    // print data as hex
+    for (u32 i = 0; i < 64; i++) {
+        uart::write("{:02x} ", buf[i]);
+    }
+
+    return;
 }

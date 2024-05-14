@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 add_executable(raspi
         src/common/mem.cpp
         src/common/string.cpp
+        src/common/format.cpp
 
         src/kernel/boot.S
         src/kernel/kernel.cpp
@@ -17,7 +18,10 @@ add_executable(raspi
         src/kernel/mailbox.cpp
         src/kernel/buffer.cpp
         src/kernel/gpu.cpp
-        src/common/format.cpp
+        src/kernel/timer.cpp
+        src/kernel/emmc.cpp
+        src/kernel/gpio.cpp
+        src/kernel/sd.cpp
 )
 
 include_directories(include)

@@ -4,25 +4,37 @@
 
 using namespace mailbox;
 
-gpu::buffer gpu::get_framebuffer(u32 width, u32 height, u32 depth) {
-    u8 bytes_per_pixel = depth / 8;
+gpu::buffer gpu::allocate_framebuffer(u32 width, u32 height, u32 depth) {
+    mailbox::property_message<
+            framebuffer::physical_dimensions_request<set>, framebuffer::virtual_dimensions_request<set>,
+            framebuffer::virtual_offset_request<set>, framebuffer::depth_request<set>,
+            framebuffer::pixel_order_request<set>, framebuffer::allocate_buffer_request,
+            framebuffer::pitch_request<get>>
+            message {
+            {1024, 768}, {1024, 768}, {0, 0}, {32}, {1}, {4096}, {}
+    };
 
-    /*property_message<framebuffer::physical_dimensions_request<command_type::set>> physical_dimensions(width, height);
-    property_message<framebuffer::virtual_dimensions_request<command_type::set>> virtual_dimensions(width, height);
-    property_message<framebuffer::depth_request<command_type::set>> depth_request(depth);
-    property_message<framebuffer::allocate_buffer_request> allocate_framebuffer(16);
+    mailbox::call_property(message);
 
-    framebuffer::physical_dimensions_response physical_dimension= call_property<>(physical_dimensions)
-            .get_property<framebuffer::physical_dimensions_response>().get_tag();
-    call_property<>(virtual_dimensions);
-    call_property<>(depth_request);
-    
-    framebuffer::allocate_buffer_response allocate_buffer_response = call_property<>(allocate_framebuffer)
-            .get_property<framebuffer::allocate_buffer_response>().get_tag();
+    auto phys_dim = message.get_tag<framebuffer::physical_dimensions_request<set>>();
+    auto virt_dim = message.get_tag<framebuffer::virtual_dimensions_request<set>>();
+    auto virt_off = message.get_tag<framebuffer::virtual_offset_request<set>>();
+    auto depth_res = message.get_tag<framebuffer::depth_request<set>>();
+    auto order = message.get_tag<framebuffer::pixel_order_request<set>>();
+    auto buffer = message.get_tag<framebuffer::allocate_buffer_request>();
+    auto pitch = message.get_tag<framebuffer::pitch_request<get>>();
 
-    return {physical_dimension.width, physical_dimension.height, physical_dimension.width * bytes_per_pixel,
-            (pixel*)(uintptr_t) allocate_buffer_response.address, allocate_buffer_response.size,
-            physical_dimension.width / 8, physical_dimension.height / 8, 0, 0 };*/
+    return {
+        .width = virt_dim.width,
+        .height = virt_dim.height,
+        .pitch = pitch.pitch,
+        .data = reinterpret_cast<gpu::pixel*>(buffer.address),
+        .buffer_size = buffer.size,
+        .char_width = 8,
+        .char_height = 8,
+        .cursor_x = 0,
+        .cursor_y = 0
+    };
 }
 
 void gpu::buffer::putc(char c) {

@@ -214,5 +214,13 @@ namespace type {
     template <typename T>
     concept integral = is_integral<T>::value;
 
+    template<typename What, typename... Args>
+    struct is_present {
+        static constexpr bool value = (is_same_v<What, Args> || ...);
+    };
+
+    template<typename What, typename... Args>
+    inline constexpr bool is_present_v = is_present<What, Args...>::value;
+
 
 }

@@ -16,25 +16,10 @@ void uart::init() {
     peripheral::write<u32>(uart::aux_mu_iir_reg, 0xC6);
     peripheral::write<u32>(uart::aux_mu_baud_reg, 270); // 115200 baud
 
-    u32 ra = peripheral::read<u32>(gpio::gpfsel1);
-    ra &= ! ((7 << 12) | (7 << 15)); // gpio14 and gpio15
-    ra |= (2 << 12) | (2 << 15); // alt5
-
-    peripheral::write<u32>(gpio::gpfsel1, ra);
-    // disable pull-up/pull-down
-    peripheral::write<u32>(gpio::gppud, 0);
-
-    // wait 150 cycles
-    delay(150);
-
-    // disable pull-up/pull-down for pins 14 and 15
-    peripheral::write<u32>(gpio::gppudclk0, (1 << 14) | (1 << 15));
-
-    // wait 150 cycles
-    delay(150);
-
-    // write 0 to gppudclk0 to make it take effect
-    peripheral::write<u32>(gpio::gppudclk0, 0);
+    gpio::set_function(14, gpio::function::alt5);
+    gpio::set_function(15, gpio::function::alt5);
+    gpio::enable(14);
+    gpio::enable(15);
 
     peripheral::write<u32>(uart::aux_mu_cntl_reg, 3);
 }
