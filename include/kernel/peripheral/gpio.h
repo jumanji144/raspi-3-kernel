@@ -23,7 +23,9 @@ namespace gpio {
         alt5 = 2
     };
 
-    void enable(u8 pin);
+    void disable_pulling(u8 pin);
+    void pull_up(u8 pin);
+    void pull_down(u8 pin);
     void set_function(u8 pin, function func);
 
 }

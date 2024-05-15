@@ -12,17 +12,23 @@ using namespace emmc;
 
 bool device::init() {
     // configure gpio pins
-    // 34 - 39 are the data bus
-    for (u8 i = 34; i < 40; i++) {
-        gpio::set_function(i, gpio::function::input);
+    for (u8 i =  48; i <= 53; i++) {
+        gpio::set_function(i, gpio::function::alt0);
     }
 
-    // 48 - 52 is the command bus
-    for (u8 i = 48; i < 53; i++) {
+    for (u8 i = 34; i < 39; i++) {
         gpio::set_function(i, gpio::function::alt3);
+        if (i == 34) {
+            gpio::disable_pulling(i);
+        } else {
+            gpio::pull_up(i);
+        }
     }
 
     // reset host controller
+    bus->control0.raw = 0;
+    bus->control1.raw = 0;
+
     bus->control1.srst_hc = true;
 
     u32 timeout = 0;
@@ -52,7 +58,7 @@ bool device::init() {
 }
 
 bool device::reset() {
-    bus->interrupt_en.enable_all(); // enable all interrupts
+    bus->interrupt_en.disable_all(); // disable all interrupts, 0 = enabled
     bus->interrupt_mask.enable_all(); // mask all interrupts
     bus->interrupt.enable_all(); // clear all interrupts
 
@@ -187,32 +193,38 @@ bool device::data_transfer(reg::cmdtm command) {
     return true;
 }
 
+u8 find_lowest_set_bit(u32 val) {
+    u8 r = 32;
+    if (!val)
+        return 0;
+
+    if (!(val & 0xFFFF0000u)) { val <<= 16; r -= 16; }
+    if (!(val & 0xFF000000u)) { val <<= 8; r -= 8; }
+    if (!(val & 0xF0000000u)) { val <<= 4; r -= 4; }
+    if (!(val & 0xC0000000u)) { val <<= 2; r -= 2; }
+    if (!(val & 0x80000000u)) { val <<= 1; r -= 1; }
+
+    return r;
+}
+
 u32 device::get_clock_divider(u32 freq) const {
-    u32 clock_div = 41666666 / freq;
-    u32 shift = 32;
-
-    u32 best_div = clock_div - 1;
-    if (!best_div)
-        shift = 0;
-    else {
-        if(!(best_div & 0xFFFF0000)) { best_div <<= 16; shift -= 16; }
-        if(!(best_div & 0xFF000000)) { best_div <<= 8; shift -= 8; }
-        if(!(best_div & 0xF0000000)) { best_div <<= 4; shift -= 4; }
-        if(!(best_div & 0xC0000000)) { best_div <<= 2; shift -= 2; }
-        if(!(best_div & 0x80000000)) { best_div <<= 1; shift -= 1; }
-
-        if (shift > 0)
-            shift -= 1;
-
-        if (shift > 7)
-            shift = 7;
+    u32 div = (41666667 + freq - 1) / freq; // raspi always uses 41.666667MHz base clock
+    if (div > 0x3FF) {
+        div = 0x3FF; // max clock divisor
     }
-
-    u32 best = spec > 1 ? clock_div : 1 << shift;
-    if (best <= 2) best = 2;
-
-    u32 extra = spec > 1 ? (best & 0x300) >> 2 : 0;
-    return ((best & 0x0FF) << 8) | extra;
+    if (bus->slotisr_ver.sdversion < 2) {
+        u8 shift = find_lowest_set_bit(div);
+        if (shift > 0) {
+            shift--;
+        }
+        if (shift > 7) {
+            shift = 7;
+        }
+        div = ((u32) 1 << shift);
+    } else if (div < 3) {
+        div = 4;
+    }
+    return div;
 }
 
 bool device::set_clock(u32 f) {
@@ -225,16 +237,19 @@ bool device::set_clock(u32 f) {
     timer::wait_us(10);
 
     u32 div = get_clock_divider(f);
+    u32 divlo = (div & 0xFF) << 8;
+    u32 divhi = (div & 0x300) >> 2;
 
-    uart::write("Setting clock to: {}Hz, Divisor: {}\n", f, div);
+    uart::write("Setting clock to: {:8x}, DIV: {:8x}\n", f, div);
 
-    u32* clk = (u32*)&bus->control1;
-    *clk = (*clk & 0xFFFF003F) | div; // hack div into the right place
+    bus->control1.raw = (bus->control1.raw & 0xFFFF003F) | divlo | divhi;
 
     timer::wait_us(10);
 
     // enable clock
     bus->control1.clk_en = true;
+
+    timer::wait_us(10);
 
     // wait for clock to be stable
     u32 timeout = 0;
@@ -242,11 +257,12 @@ bool device::set_clock(u32 f) {
         if (bus->control1.clk_stable) {
             break;
         }
+
         timer::wait_us(10);
     }
 
     if (timeout == max_clock_retry) {
-        uart::write("Failed to set clock\n");
+        uart::write("Clock not stable within timeout\n");
         return false;
     }
 
