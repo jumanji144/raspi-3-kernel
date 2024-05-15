@@ -1,5 +1,6 @@
 #include <kernel/peripheral/sd.h>
 #include "kernel/peripheral/uart1.h"
+#include <kernel/mailbox/mailbox.h>
 
 using namespace emmc;
 
@@ -9,8 +10,13 @@ bool sd::check_v2() {
     u32 arg = 0x1AA;
     if (!send_command(cmd, arg)) {
         // check if the error was a timeout
-        if (this->error.cmd_timeout)
-            return false;
+        if (this->error.cmd_timeout) {
+            if (!reset_command())
+                return false;
+
+            this->v2 = false;
+            return true;
+        }
 
         uart::write("Failed to check if card is version 2\n");
         return false;
@@ -21,6 +27,7 @@ bool sd::check_v2() {
         return false;
     }
 
+    this->v2 = true;
     return true;
 }
 
@@ -153,6 +160,7 @@ bool sd::get_base_clock() {
 }
 
 bool sd::init() {
+
     uart::write("Initializing SD card...\n");
     if (!device::init()) return false;
 
@@ -166,7 +174,7 @@ bool sd::init() {
     if (!send_command(cmd_go_to_idle, 0)) return false;
 
     // check if we have a host spec v2 card
-    this->v2 = check_v2();
+    if (!check_v2()) return false;
 
     // power up the card and figure out information
     if (!check_op_cond()) return false;
