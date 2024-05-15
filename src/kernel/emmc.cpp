@@ -11,19 +11,6 @@ inline constexpr u32 max_clock_retry = 10000;
 using namespace emmc;
 
 bool device::init() {
-    // configure gpio pins
-    for (u8 i =  48; i <= 53; i++) {
-        gpio::set_function(i, gpio::function::alt0);
-    }
-
-    for (u8 i = 34; i < 39; i++) {
-        gpio::set_function(i, gpio::function::alt3);
-        if (i == 34) {
-            gpio::disable_pulling(i);
-        } else {
-            gpio::pull_up(i);
-        }
-    }
 
     // reset host controller
     bus->control0.raw = 0;

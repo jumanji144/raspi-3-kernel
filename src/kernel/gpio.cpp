@@ -11,21 +11,21 @@ void gpio::disable_pulling(u8 pin) {
 }
 
 void gpio::pull_up(u8 pin) {
-    disable_pulling(pin);
+    u32 reg = pin < 32 ? gppudclk0 : gppudclk1;
     peripheral::write<u32>(gppud, 2); // enable pull up
     timer::wait_cycles(150);
-    peripheral::write<u32>(gppudclk0, 1 << (pin % 32));
+    peripheral::write<u32>(reg, 1 << (pin % 32));
     timer::wait_cycles(150);
-    peripheral::write<u32>(gppudclk0, 0); // flush clock
+    peripheral::write<u32>(reg, 0); // flush clock
 }
 
 void gpio::pull_down(u8 pin) {
-    disable_pulling(pin);
+    u32 reg = pin < 32 ? gppudclk0 : gppudclk1;
     peripheral::write<u32>(gppud, 1); // enable pull down
     timer::wait_cycles(150);
-    peripheral::write<u32>(gppudclk0, 1 << (pin % 32));
+    peripheral::write<u32>(reg, 1 << (pin % 32));
     timer::wait_cycles(150);
-    peripheral::write<u32>(gppudclk0, 0); // flush clock
+    peripheral::write<u32>(reg, 0); // flush clock
 }
 
 void gpio::set_function(u8 pin, gpio::function func) {
