@@ -18,6 +18,7 @@ set(CMAKE_OBJDUMP ${TOOLCHAIN_PATH}aarch64-elf-objdump
     CACHE FILEPATH "objdump tool" FORCE)
 
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+set(CMAKE_CXX_COMPILER_WORKS 1)
 
 set(CMAKE_FIND_ROOT_PATH ${COMPILER_PATH})
 
@@ -28,5 +29,5 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 
 # settings
-set(CMAKE_CXX_FLAGS_INIT "-fpic -ffreestanding -fno-exceptions -fno-rtti -fno-threadsafe-statics -fpermissive -mcpu=cortex-a53+nosimd")
+set(CMAKE_CXX_FLAGS_INIT "-fpic -ffreestanding -fno-exceptions -fno-rtti -fno-threadsafe-statics -fpermissive -mcpu=cortex-a53+nosimd -mtune=cortex-a53")
 set(CMAKE_SHARED_LINKER_FLAGS "-nostdlib -T ${CMAKE_SOURCE_DIR}/linker.ld -M ${CMAKE_BINARY_DIR}/kernel.map")
