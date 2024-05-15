@@ -18,8 +18,8 @@ void uart::init() {
 
     gpio::set_function(14, gpio::function::alt5);
     gpio::set_function(15, gpio::function::alt5);
-    gpio::enable(14);
-    gpio::enable(15);
+    gpio::disable_pulling(14);
+    gpio::disable_pulling(15);
 
     peripheral::write<u32>(uart::aux_mu_cntl_reg, 3);
 }
