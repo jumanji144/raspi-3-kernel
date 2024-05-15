@@ -84,6 +84,8 @@ namespace mailbox {
         constexpr clock_rate(clock_id id, u32 rate, u32 skip_turbo = 0)
             : tag(command { device::clock, type, 2 }, 12, 8),
             cid(id), rate(rate), skip_turbo(skip_turbo) {}
+
+        constexpr clock_rate() : clock_rate(clock_id::emmc, 0) {}
     };
 
     template<tag_type... Tags>

@@ -208,7 +208,7 @@ u8 find_lowest_set_bit(u32 val) {
 }
 
 u32 device::get_clock_divider(u32 freq) const {
-    u32 div = (41666667 + freq - 1) / freq; // raspi always uses 41.666667MHz base clock
+    u32 div = (base_clock + freq - 1) / freq; // raspi always uses 41.666667MHz base clock
     if (div > 0x3FF) {
         div = 0x3FF; // max clock divisor
     }
@@ -240,7 +240,8 @@ bool device::set_clock(u32 f) {
     u32 divlo = (div & 0xFF) << 8;
     u32 divhi = (div & 0x300) >> 2;
 
-    uart::write("Setting clock to: {:8x}, DIV: {:8x}\n", f, div);
+    uart::write("Setting clock to: {}, DIV: {:8x}, Result: {}",
+                f, div, base_clock / div);
 
     bus->control1.raw = (bus->control1.raw & 0xFFFF003F) | divlo | divhi;
 

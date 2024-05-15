@@ -133,9 +133,30 @@ bool sd::get_scr() {
     return true;
 }
 
+bool sd::get_base_clock() {
+    mailbox::property_message<mailbox::clock_rate<mailbox::command_type::get>> message {
+            { mailbox::clock_id::emmc, 0, 0 }
+    };
+
+    mailbox::call_property(message);
+
+    auto response = message.get_tag<mailbox::clock_rate<mailbox::command_type::get>>();
+
+    if (response.rate == 0) {
+        uart::write("Failed to get base clock\n");
+        return false;
+    }
+
+    this->base_clock = response.rate;
+
+    return true;
+}
+
 bool sd::init() {
     uart::write("Initializing SD card...\n");
     if (!device::init()) return false;
+
+    if (!get_base_clock()) return false;
 
     // setup clock for identification mode
     if(!set_clock(clock_rate_iden)) return false;

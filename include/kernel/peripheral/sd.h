@@ -70,6 +70,7 @@ namespace emmc {
         u32 transfer_data(addr lba, u8* buffer, u32 blocks, bool write);
 
     private:
+        bool get_base_clock();
         bool send_app_command(reg::cmdtm cmd, u32 arg);
         bool check_v2();
         bool check_op_cond();
