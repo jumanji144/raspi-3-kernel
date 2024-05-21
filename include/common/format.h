@@ -18,7 +18,7 @@ namespace str {
 
     }
 
-    constexpr void format(string buffer, const char* fmt) {
+    static constexpr void format(string buffer, const char* fmt) {
         size_t itr_size = math::min(buffer.size-1, strlen(fmt));
         for (size_t i = 0; i < itr_size; i++) {
             buffer.data[0] = fmt[i];
@@ -31,12 +31,12 @@ namespace str {
     }
 
     template <typename... Args>
-    constexpr void format(string buffer, const char* fmt, Args&& ... args) {
+    static constexpr void format(string buffer, const char* fmt, Args&& ... args) {
         format_impl(buffer, fmt, util::forward<Args>(args)...);
     }
 
     template <typename First, typename... Args>
-    constexpr void format_impl(string buffer, const char* fmt, First&& first, Args&&... args) {
+    static constexpr void format_impl(string buffer, const char* fmt, First&& first, Args&&... args) {
         if (buffer.size == 0) {
             return;
         }
