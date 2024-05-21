@@ -23,6 +23,13 @@ namespace emmc {
             card_to_host
         };
 
+        enum cmd_type : u8 {
+            normal,
+            suspend,
+            resume,
+            abort
+        };
+
         struct cmdtm {
             unsigned resa : 1{};
             bool blkcnt_en : 1{};
@@ -35,14 +42,14 @@ namespace emmc {
             bool crcchk_en : 1{};
             bool ixchk_en : 1{};
             bool isdata : 1{};
-            u8 type : 2{};
+            cmd_type type : 2{};
             u8 index : 6{};
             unsigned reserved4 : 2{};
         };
 
         inline constexpr cmdtm invalid_command = {
                 .resa = 1, .blkcnt_en = 1, .auto_cmd_en = 3, .dir = data_dir::card_to_host, .multi_blk = 1, .resb = 0xF,
-                .rspns_type = rt48busy, .res0 = 1, .crcchk_en = 1, .ixchk_en = 1, .isdata = 1, .type = 3,
+                .rspns_type = rt48busy, .res0 = 1, .crcchk_en = 1, .ixchk_en = 1, .isdata = 1, .type = abort,
                 .index = 0xF, .reserved4 = 1
         };
 
@@ -146,20 +153,23 @@ namespace emmc {
             };
         };
 
-        struct control2 {
-            bool acnox_err : 1;
-            bool acto_err : 1;
-            bool acrc_err : 1;
-            bool aend_err : 1;
-            bool abad_err : 1;
-            unsigned reserved0 : 2;
-            bool notc12_err : 1;
-            unsigned reserved1 : 8;
-            u8 uhsmode : 3;
-            unsigned reserved2 : 4;
-            bool tuneon : 1;
-            bool tuned : 1;
-            unsigned reserved3 : 6;
+        union control2 {
+            struct {
+                bool acnox_err: 1;
+                bool acto_err: 1;
+                bool acrc_err: 1;
+                bool aend_err: 1;
+                bool abad_err: 1;
+                unsigned reserved0: 2;
+                bool notc12_err: 1;
+                unsigned reserved1: 8;
+                u8 uhsmode: 3;
+                unsigned reserved2: 4;
+                bool tuneon: 1;
+                bool tuned: 1;
+                unsigned reserved3: 6;
+            };
+            u32 raw;
         };
 
         struct slotisr_ver {
@@ -185,17 +195,26 @@ namespace emmc {
         reg::interrupt interrupt_mask;
         reg::interrupt interrupt_en;
         reg::control2 control2;
+        u32 capabilities1;
+        u32 capabilities2;
+        u32 reserved0[2]; // 0x48 - 0x50
         reg::interrupt force_irpt;
+        u32 reserved1[7]; // 0x54 - 0x70
         u32 boot_timeout;
         u32 dbg_sel;
+        u32 reserved2[2]; // 0x78 - 0x80
         u32 exrdfifo_cfg;
         u32 exrdfifo_en;
         u32 tune_step;
         u32 tune_steps_std;
         u32 tune_steps_ddr;
+        u32 reserved3[0x17]; // 0x94 - 0xF0
         u32 spi_int_spt;
+        u32 reserved4[2]; // 0xF4 - 0xFC
         reg::slotisr_ver slotisr_ver;
     };
+
+    static volatile regs* bus = (volatile regs*)peripheral::emmc;
 
     class device {
     public:
@@ -214,7 +233,17 @@ namespace emmc {
         bool data_transfer(reg::cmdtm command);
         bool transfer_block(bool write, u32* buffer);
 
-        volatile regs* bus = (volatile regs*)peripheral::emmc;
+        using tout_func = bool(*)();
+
+        static bool timeout_wait(tout_func func, u32 max) {
+            u32 _tout = 0;
+            for(; _tout < max; _tout++) {
+                if (func()) {
+                    break;
+                }
+            }
+            return _tout < max;
+        }
 
         reg::interrupt error{};
         u32* buffer = nullptr;
@@ -222,6 +251,8 @@ namespace emmc {
         u32 response[4]{};
         u32 blocks = 0;
         u32 block_size = 0;
+        u32 capabilities1{};
+        u32 capabilities2{};
         u8 spec{};
         u8 vendor{};
         bool success = false;

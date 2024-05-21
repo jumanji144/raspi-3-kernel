@@ -65,6 +65,8 @@ namespace emmc {
         }
 
         bool init() override;
+        static bool power_on();
+        static bool power_off();
         //bool reset() override;
 
         u32 transfer_data(addr lba, u8* buffer, u32 blocks, bool write);
@@ -76,6 +78,7 @@ namespace emmc {
         bool check_op_cond();
         bool read_cid();
         bool get_scr();
+        bool set_initial_clock();
 
         bool setup_hc_transfer(u32 blocks);
 

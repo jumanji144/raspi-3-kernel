@@ -12,34 +12,29 @@ using namespace emmc;
 
 bool device::init() {
 
-    // reset host controller
-    bus->control0.raw = 0;
-    bus->control1.raw = 0;
+    // disable internal clock
+    bus->control1.clk_en = false;
+    bus->control1.clk_intlen = false;
 
     bus->control1.srst_hc = true;
 
-    u32 timeout = 0;
-    for (; timeout < max_reset_retry; timeout++) {
-        if (!bus->control1.srst_hc) {
-            break;
-        }
-        timer::wait_us(10);
-    }
-
-    uart::write("Reset host controller\n");
-
-    if (timeout == max_reset_retry) {
-        uart::write("Failed to reset host controller\n");
+    if(!timeout_wait([] { return !bus->control1.srst_hc; }, max_reset_retry)) {
+        uart::write("EMMC: device::init: Failed to reset host controller\n");
         return false;
     }
+
+    uart::write("EMMC: device::init: Reset host controller\n");
 
     this->spec = bus->slotisr_ver.sdversion;
     this->vendor = bus->slotisr_ver.vendor;
 
-    bus->control1.clk_intlen = true; // enable internal clock
-    bus->control1.data_tounit = 0b1110; // set command timeout to 2^27 cycles
+    this->capabilities1 = bus->capabilities1;
+    this->capabilities2 = bus->capabilities2;
 
-    timer::wait_us(10);
+    bus->control2.raw = 0x0;
+
+    bus->control1.clk_intlen = true;
+    bus->control1.data_tounit = 0x7;
 
     return true;
 }
@@ -49,7 +44,7 @@ bool device::reset() {
     bus->interrupt_mask.enable_all(); // mask all interrupts
     bus->interrupt.enable_all(); // clear all interrupts
 
-    timer::wait_us(10); // wait 10us
+    timer::wait_us(2000);
 
     return true;
 }
@@ -68,13 +63,25 @@ bool device::reset_command() {
 }
 
 bool device::send_command(reg::cmdtm command, u32 arg) {
-    uart::write("Sending command, CMD: {:8x}, ARG: {:8x}\n", *(u32*)&command, arg);
+    // wait for command inhibit to be clear
+    while(bus->status.cmd_inhibit) {
+        timer::wait_us(10);
+    }
+
+    if(command.rspns_type == reg::rt48busy && command.type == reg::abort) {
+        // wait for data inhibit to be clear
+        while(bus->status.dat_inhibit) {
+            timer::wait_us(10);
+        }
+    }
+
+    uart::write("EMMC: device::send_command: Sending command, CMD: {:8x}, ARG: {:8x}\n", *(u32*)&command, arg);
     bus->interrupt.enable_all(); // clear all interrupts
 
     bus->arg1 = arg;
     *(reg::cmdtm*)&bus->cmdtm = command;
 
-    timer::wait_us(10);
+    timer::wait_us(2000);
 
     u32 i = 0;
     for (; i < max_command_retry; i++) {
@@ -83,6 +90,7 @@ bool device::send_command(reg::cmdtm command, u32 arg) {
             this->error = const_cast<reg::interrupt&>(bus->interrupt);
             this->success = false;
             bus->interrupt.clear_error();
+            uart::write("EMMC: device::send_command: Error interrupt\n");
             return false;
         }
 
@@ -90,11 +98,11 @@ bool device::send_command(reg::cmdtm command, u32 arg) {
             break;
         }
 
-        timer::wait_us(1);
+        timer::wait_us(10);
     }
 
     if (i == max_command_retry) {
-        uart::write("Failed to send command\n");
+        uart::write("EMMC: device::send_command: Timeout waiting for command to complete\n");
         this->success = false;
         return false;
     }
@@ -180,37 +188,40 @@ bool device::data_transfer(reg::cmdtm command) {
     return true;
 }
 
-u8 find_lowest_set_bit(u32 val) {
-    u8 r = 32;
-    if (!val)
-        return 0;
-
-    if (!(val & 0xFFFF0000u)) { val <<= 16; r -= 16; }
-    if (!(val & 0xFF000000u)) { val <<= 8; r -= 8; }
-    if (!(val & 0xF0000000u)) { val <<= 4; r -= 4; }
-    if (!(val & 0xC0000000u)) { val <<= 2; r -= 2; }
-    if (!(val & 0x80000000u)) { val <<= 1; r -= 1; }
-
-    return r;
-}
-
 u32 device::get_clock_divider(u32 freq) const {
-    u32 div = (base_clock + freq - 1) / freq; // raspi always uses 41.666667MHz base clock
-    if (div > 0x3FF) {
-        div = 0x3FF; // max clock divisor
+    u32 target = 0;
+    if (freq > base_clock)
+        target = 1;
+    else {
+        target = base_clock / freq;
+        if (base_clock % freq)
+            target--; // round down
     }
-    if (bus->slotisr_ver.sdversion < 2) {
-        u8 shift = find_lowest_set_bit(div);
-        if (shift > 0) {
-            shift--;
+
+    u32 div = -1;
+    for (u8 bit = 31; bit >= 0; bit--) {
+        u32 mask = 1 << bit;
+        if (target & mask) {
+            div = bit;
+            target &= ~mask;
+            if (target) {
+                div++; // round up
+            }
+            break;
         }
-        if (shift > 7) {
-            shift = 7;
-        }
-        div = ((u32) 1 << shift);
-    } else if (div < 3) {
-        div = 4;
     }
+
+    if (div == -1) // was unable to find a divisor
+        div = 31;
+    if (div >= 32)
+        div = 31;
+
+    if (div != 0)
+        div = 1 << (div - 1);
+
+    if (div > 0x3FF)
+        div = 0x3FF;
+
     return div;
 }
 
@@ -221,16 +232,19 @@ bool device::set_clock(u32 f) {
 
     bus->control1.clk_en = false; // disable clock while we set the divisor
 
-    timer::wait_us(10);
+    timer::wait_us(100);
 
     u32 div = get_clock_divider(f);
-    u32 divlo = (div & 0xFF) << 8;
-    u32 divhi = (div & 0x300) >> 2;
+    u32 val = ((div & 0xff) << 8) | (((div >> 8) & 0x3) << 6) | (0 << 5);
 
-    uart::write("Setting clock to: {}, DIV: {:8x}, Result: {}",
-                f, div, base_clock / div);
+    u32 dem = 1;
+    if (div != 0)
+        dem = 2 * div;
+    u32 actual = base_clock / dem;
 
-    bus->control1.raw = (bus->control1.raw & 0xFFFF003F) | divlo | divhi;
+    uart::write("Setting clock to: {}Hz, div: {}, actual: {}Hz\n", f, div, actual);
+
+    bus->control1.raw = (bus->control1.raw & 0xFFFF003F) | val;
 
     timer::wait_us(10);
 

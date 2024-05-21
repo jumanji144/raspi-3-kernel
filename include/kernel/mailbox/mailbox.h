@@ -75,17 +75,50 @@ namespace mailbox {
         pixel_bv = 14
     };
 
-    template <command_type type>
-    struct clock_rate : tag {
+    struct set_clock_rate : tag {
         clock_id cid;
         u32 rate;
         u32 skip_turbo;
 
-        constexpr clock_rate(clock_id id, u32 rate, u32 skip_turbo = 0)
-            : tag(command { device::clock, type, 2 }, 12, 8),
+        constexpr set_clock_rate(clock_id id, u32 rate, u32 skip_turbo = 0)
+            : tag(command { device::clock, command_type::set, 2 }, 12, 8),
             cid(id), rate(rate), skip_turbo(skip_turbo) {}
 
-        constexpr clock_rate() : clock_rate(clock_id::emmc, 0) {}
+        constexpr set_clock_rate() : set_clock_rate(clock_id::emmc, 0) {}
+    };
+
+    struct request_clock_rate : tag {
+        clock_id cid;
+        u32 rate;
+
+        constexpr request_clock_rate(clock_id id)
+            : tag(command { device::clock, command_type::get, 2 }, 8, 4),
+            cid(id), rate(0) {}
+
+        constexpr request_clock_rate() : request_clock_rate(clock_id::emmc) {}
+    };
+
+    enum power_did : u32 {
+        sd,
+        uart0,
+        uart1,
+        usb_hcd,
+        i2c0,
+        i2c1,
+        i2c2,
+        spi,
+        ccp2tx
+    };
+
+    struct power_state : tag {
+        power_did device;
+        u32 state;
+
+        constexpr power_state(power_did device, u32 state)
+            : tag(command { device::power, command_type::set, 1 }, 8, 8),
+            device(device), state(state) {}
+
+        constexpr power_state() : power_state(power_did::sd, 0) {}
     };
 
     template<tag_type... Tags>
