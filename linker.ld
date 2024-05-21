@@ -10,6 +10,7 @@ SECTIONS
     .text :
     {
         KEEP(*(.text.boot))
+        . = ALIGN(8);
         *(.text)
 
         . = ALIGN(8);
@@ -19,6 +20,7 @@ SECTIONS
     {
         . = ALIGN(8);
         *(.rodata)
+        . = ALIGN(8);
         *(.rodata*)
         . = ALIGN(8);
     } >FLASH
@@ -31,8 +33,11 @@ SECTIONS
         . = ALIGN(8);
         __data_start__ = .;        /* create a global symbol at data start */
         *(.data)           /* .data sections */
+        . = ALIGN(8);
         *(.data*)          /* .data* sections */
+        . = ALIGN(8);
         *(.RamFunc)        /* .RamFunc sections */
+        . = ALIGN(8);
         *(.RamFunc*)       /* .RamFunc* sections */
 
         . = ALIGN(8);
@@ -47,7 +52,9 @@ SECTIONS
     /* This is used by the startup in order to initialize the .bss section */
     __bss_start__ = .;
     *(.bss)
+    . = ALIGN(8);
     *(.bss*)
+    . = ALIGN(8);
     *(COMMON)
 
     . = ALIGN(8);
