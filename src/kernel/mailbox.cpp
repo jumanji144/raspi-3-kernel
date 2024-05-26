@@ -3,7 +3,8 @@
 namespace mailbox {
 
     status get_status() {
-        return peripheral::read<status>(mailbox::status_addr);
+        u32 status = peripheral::read<u32>(mailbox::status_addr);
+        return reinterpret_cast<mailbox::status&>(status);
     }
 
     void send_message(message msg, int channel) {
@@ -11,14 +12,15 @@ namespace mailbox {
         // wait until we can talk to the VC
         while (get_status().full) { }
 
-        peripheral::write<mailbox::message>(mailbox::write_addr, msg);
+        peripheral::write<u32>(mailbox::write_addr, reinterpret_cast<u32&>(msg));
     }
 
     message read_message() {
         // wait until we can talk to the VC
         while (get_status().empty) { }
 
-        return peripheral::read<mailbox::message>(mailbox::read_addr);
+        u32 msg = peripheral::read<u32>(mailbox::read_addr);
+        return reinterpret_cast<message&>(msg);
     }
 
     bool call(message msg, int channel) {

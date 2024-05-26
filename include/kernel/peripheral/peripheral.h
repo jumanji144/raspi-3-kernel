@@ -15,12 +15,12 @@ namespace peripheral {
 
     template<typename T>
     static inline T read(addr reg) {
-        return *(T*)reg;
+        return *(T volatile*)reg;
     }
 
     template<typename T>
     static inline void write(addr reg, T data) {
-        *(T*)reg = data;
+        *(T volatile*)reg = data;
     }
 
 };
