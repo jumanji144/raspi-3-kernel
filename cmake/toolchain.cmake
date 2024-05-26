@@ -29,5 +29,5 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 
 # settings
-set(CMAKE_CXX_FLAGS_INIT "-fpic -ffreestanding -fno-exceptions -fno-rtti -fno-threadsafe-statics -fpermissive -mcpu=cortex-a53+nosimd -mtune=cortex-a53")
+set(CMAKE_CXX_FLAGS_INIT "-fpic -ffreestanding -fno-exceptions -fno-rtti -fno-threadsafe-statics -fpermissive -mcpu=cortex-a53+nosimd -mgeneral-regs-only")
 set(CMAKE_SHARED_LINKER_FLAGS "-nostdlib -T ${CMAKE_SOURCE_DIR}/linker.ld -M ${CMAKE_BINARY_DIR}/kernel.map")
