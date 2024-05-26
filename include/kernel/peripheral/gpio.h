@@ -8,6 +8,8 @@ namespace gpio {
     static constexpr addr gpfsel1 = peripheral::gpio + 0x04;
     static constexpr addr gpset0 = peripheral::gpio + 0x1C;
     static constexpr addr gpclr0 = peripheral::gpio + 0x28;
+    static constexpr addr gphen0 = peripheral::gpio + 0x64;
+    static constexpr addr gphen1 = peripheral::gpio + 0x68;
     static constexpr addr gppud = peripheral::gpio + 0x94;
     static constexpr addr gppudclk0 = peripheral::gpio + 0x98;
     static constexpr addr gppudclk1 = peripheral::gpio + 0x9C;
@@ -27,5 +29,6 @@ namespace gpio {
     void pull_up(u8 pin);
     void pull_down(u8 pin);
     void set_function(u8 pin, function func);
+    void enable_interrupt(u8 pin);
 
 }
