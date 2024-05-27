@@ -39,6 +39,9 @@ SECTIONS
         *(.RamFunc)        /* .RamFunc sections */
         . = ALIGN(8);
         *(.RamFunc*)       /* .RamFunc* sections */
+        . = ALIGN(8);
+        *(.got*)          /* .got* sections */
+
 
         . = ALIGN(8);
         __data_end__ = .;        /* define a global symbol at data end */

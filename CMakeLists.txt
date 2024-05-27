@@ -30,9 +30,10 @@ target_link_options(raspi PRIVATE
         -T ${CMAKE_SOURCE_DIR}/linker.ld
         -nostdlib
         -nostartfiles
-        -ffreestanding)
+        -ffreestanding
+        -static)
 
-target_compile_options(raspi PRIVATE -O0)
+target_compile_options(raspi PRIVATE -O0 -g)
 
 add_custom_command(
         TARGET raspi POST_BUILD
