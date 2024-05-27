@@ -2,269 +2,155 @@
 #include <kernel/peripheral/gpio.h>
 #include "kernel/peripheral/timer.h"
 #include "kernel/peripheral/uart1.h"
+#include <common/memory/mem.h>
 
-inline constexpr u32 max_reset_retry = 100;
-inline constexpr u32 max_command_retry = 100;
-inline constexpr u32 max_data_retry = 100;
-inline constexpr u32 max_clock_retry = 10000;
+bool emmc::device::init() {
+    host_version = slotisr_ver::get(bus->slotisr_ver).sdversion;
+    base_clock_rate = this->get_base_clock_rate();
 
-using namespace emmc;
-
-bool device::init() {
-
-    // disable internal clock
-    bus->control1.clk_en = false;
-    bus->control1.clk_intlen = false;
-
-    bus->control1.srst_hc = true;
-
-    if(!timeout_wait([] { return !bus->control1.srst_hc; }, max_reset_retry)) {
-        uart::write("EMMC: device::init: Failed to reset host controller\n");
+    if (base_clock_rate == 0) {
+        uart::write("EMMC: failed to get base clock rate\n");
         return false;
     }
 
-    uart::write("EMMC: device::init: Reset host controller\n");
+    uart::write("EMMC: host version v{}\n", host_version + 1);
+    uart::write("EMMC: base clock rate {}MHz\n", base_clock_rate / 1000000);
 
-    this->spec = bus->slotisr_ver.sdversion;
-    this->vendor = bus->slotisr_ver.vendor;
+    // Reset the card.
+    bus->control0 = 0;
+    bus->control1 |= control1::srst_hc;
 
-    this->capabilities1 = bus->capabilities1;
-    this->capabilities2 = bus->capabilities2;
-
-    bus->control2.raw = 0x0;
-
-    bus->control1.clk_intlen = true;
-    bus->control1.data_tounit = 0x7;
-
-    return true;
-}
-
-bool device::reset() {
-    bus->interrupt_en.disable_all(); // disable all interrupts, 0 = enabled
-    bus->interrupt_mask.enable_all(); // mask all interrupts
-    bus->interrupt.enable_all(); // clear all interrupts
-
-    timer::wait_us(2000);
-
-    return true;
-}
-
-bool device::reset_command() {
-    bus->control1.srst_cmd = true;
-
-    for (u32 i = 0; i < max_reset_retry; i++) {
-        if (!bus->control1.srst_cmd) {
-            return true;
-        }
+    u32 tout = 0;
+    for (; tout < 10000; ++tout) {
         timer::wait_us(10);
-    }
-
-    return false;
-}
-
-bool device::send_command(reg::cmdtm command, u32 arg) {
-    // wait for command inhibit to be clear
-    while(bus->status.cmd_inhibit) {
-        timer::wait_us(10);
-    }
-
-    if(command.rspns_type == reg::rt48busy && command.type == reg::abort) {
-        // wait for data inhibit to be clear
-        while(bus->status.dat_inhibit) {
-            timer::wait_us(10);
-        }
-    }
-
-    uart::write("EMMC: device::send_command: Sending command, CMD: {:8x}, ARG: {:8x}\n", *(u32*)&command, arg);
-    bus->interrupt.enable_all(); // clear all interrupts
-
-    bus->arg1 = arg;
-    *(reg::cmdtm*)&bus->cmdtm = command;
-
-    timer::wait_us(2000);
-
-    u32 i = 0;
-    for (; i < max_command_retry; i++) {
-
-        if (bus->interrupt.is_error()) {
-            this->error = const_cast<reg::interrupt&>(bus->interrupt);
-            this->success = false;
-            bus->interrupt.clear_error();
-            uart::write("EMMC: device::send_command: Error interrupt\n");
-            return false;
-        }
-
-        if(bus->interrupt.cmd_done) {
+        if (!(bus->control1 & control1::srst_hc)) {
             break;
         }
+    }
 
+    if (tout == 10000) {
+        uart::write("EMMC: failed to reset\n");
+        return false;
+    }
+
+    uart::write("EMMC: reset OK\n");
+
+    // enable internal clock and set the timeout to 1110, TMCLK * 2^(27), approx 2 seconds
+    bus->control1 |= ( control1::clk_intlen | control1::tounit(0xe) );
+
+    timer::wait_us(10);
+    return true;
+}
+
+bool emmc::device::send_command(reg::cmdtm command, u32 arg) {
+    // wait for command inhibit
+    while (bus->status & status::cmd_inhibit) {
         timer::wait_us(10);
     }
 
-    if (i == max_command_retry) {
-        uart::write("EMMC: device::send_command: Timeout waiting for command to complete\n");
-        this->success = false;
+    // convert command to a 32-bit integer
+    u32 code = *reinterpret_cast<u32*>(&command);
+
+    uart::write("EMMC: sending command {:8x} arg {:8x}\n", code, arg);
+
+    // set the transfer blocks
+    bus->blksizecnt = block_size | (blocks_to_transfer << 16);
+
+    bus->interrupt = bus->interrupt; // clear interrupts
+    bus->arg1 = arg;
+    bus->cmdtm = code;
+
+    timer::wait_us(1000);
+
+    // wait for cmd done interrupt
+    if(!wait_for_interrupt(interrupt::cmd_done)) {
         return false;
     }
 
     switch (command.rspns_type) {
         case reg::rt48:
         case reg::rt48busy:
-            this->response[0] = bus->resp[0];
+            response[0] = bus->resp[0];
             break;
         case reg::rt136:
-            this->response[0] = bus->resp[0];
-            this->response[1] = bus->resp[1];
-            this->response[2] = bus->resp[2];
-            this->response[3] = bus->resp[3];
+            response[0] = bus->resp[0];
+            response[1] = bus->resp[1];
+            response[2] = bus->resp[2];
+            response[3] = bus->resp[3];
             break;
-        case reg::none:
+        default:
             break;
     }
 
-    // do data transfer here
     if (command.isdata) {
-        if(!data_transfer(command))
-            return false;
+        return do_data_transfer(command.dir == reg::data_dir::host_to_card);
     }
 
-    this->success = true;
     return true;
 }
 
-bool device::transfer_block(bool write, u32* buf) {
-    u32 timeout = 0;
-    for (; timeout < max_data_retry; timeout++) {
-        bool ready = write ? bus->interrupt.write_ready : bus->interrupt.read_ready;
-        if (ready) break;
-
-        if (bus->interrupt.is_error()) {
-            bus->interrupt.clear_error();
-            this->error = const_cast<reg::interrupt&>(bus->interrupt);
-            this->success = false;
-            return false;
+bool emmc::device::reset_command() {
+    bus->control1 |= control1::srst_cmd;
+    u32 tout = 0;
+    for (; tout < 10000; ++tout) {
+        timer::wait_us(10);
+        if (!(bus->control1 & control1::srst_cmd)) {
+            break;
         }
     }
 
-    if (timeout == max_data_retry) {
-        this->success = false;
+    return tout != 10000;
+}
+
+bool emmc::device::do_data_transfer(bool write) {
+    u32 wait_mask = write ? interrupt::write_ready : interrupt::read_ready;
+
+    for (int blk = 0; blk < this->blocks_to_transfer; blk++) {
+        // don't clear bit so we can re-use this function to check for errors
+        if (!wait_for_interrupt(wait_mask, false)) {
+            return false;
+        }
+
+        u32 length = this->block_size;
+        if (write) {
+            for (; length > 0; length -= 4) {
+                bus->data = *this->buffer++;
+            }
+        } else {
+            for (; length > 0; length -= 4) {
+                *this->buffer++ = bus->data;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool emmc::device::wait_for_interrupt(u32 mask, bool clear, u32 timeout) {
+    u32 all_mask = mask | interrupt::error_mask;
+    last_timeout = false;
+    last_error = {};
+    u32 tout = 0;
+    for (; tout < timeout; ++tout) {
+        u32 ints = bus->interrupt;
+        if (ints & all_mask) {
+            break;
+        }
+        timer::wait_us(10);
+    }
+    if (tout == timeout) {
+        last_timeout = true;
         return false;
     }
 
-    u32 length = this->block_size / sizeof(u32);
+    if (clear)
+        bus->interrupt = all_mask; // clear interrupts
 
-    // write data
-    if (write) {
-        for (u32 i = 0; i < length; i++) {
-            bus->data = buf[i];
-        }
-    } else {
-        for (u32 i = 0; i < length; i++) {
-            buf[i] = bus->data;
-        }
-    }
-
-    return true;
-}
-
-bool device::data_transfer(reg::cmdtm command) {
-
-    bool write = command.dir == reg::data_dir::host_to_card;
-
-    if (write) {
-        bus->interrupt_en.write_ready = true;
-    } else {
-        bus->interrupt_en.read_ready = true;
-    }
-
-    u32* dat = buffer;
-    for(u32 block = 0; block < this->blocks; block++) {
-        if (!transfer_block(write, dat)) {
-            return false;
-        }
-        buffer += this->block_size;
-    }
-
-    return true;
-}
-
-u32 device::get_clock_divider(u32 freq) const {
-    u32 target = 0;
-    if (freq > base_clock)
-        target = 1;
-    else {
-        target = base_clock / freq;
-        if (base_clock % freq)
-            target--; // round down
-    }
-
-    u32 div = -1;
-    for (u8 bit = 31; bit >= 0; bit--) {
-        u32 mask = 1 << bit;
-        if (target & mask) {
-            div = bit;
-            target &= ~mask;
-            if (target) {
-                div++; // round up
-            }
-            break;
-        }
-    }
-
-    if (div == -1) // was unable to find a divisor
-        div = 31;
-    if (div >= 32)
-        div = 31;
-
-    if (div != 0)
-        div = 1 << (div - 1);
-
-    if (div > 0x3FF)
-        div = 0x3FF;
-
-    return div;
-}
-
-bool device::set_clock(u32 f) {
-    while(bus->status.cmd_inhibit || bus->status.dat_inhibit) { // wait for card bus to be free
-        timer::wait_us(10);
-    }
-
-    bus->control1.clk_en = false; // disable clock while we set the divisor
-
-    timer::wait_us(100);
-
-    u32 div = get_clock_divider(f);
-    u32 val = ((div & 0xff) << 8) | (((div >> 8) & 0x3) << 6) | (0 << 5);
-
-    u32 dem = 1;
-    if (div != 0)
-        dem = 2 * div;
-    u32 actual = base_clock / dem;
-
-    uart::write("Setting clock to: {}Hz, div: {}, actual: {}Hz\n", f, div, actual);
-
-    bus->control1.raw = (bus->control1.raw & 0xFFFF003F) | val;
-
-    timer::wait_us(10);
-
-    // enable clock
-    bus->control1.clk_en = true;
-
-    timer::wait_us(10);
-
-    // wait for clock to be stable
-    u32 timeout = 0;
-    for (; timeout < max_clock_retry; timeout++) {
-        if (bus->control1.clk_stable) {
-            break;
-        }
-
-        timer::wait_us(10);
-    }
-
-    if (timeout == max_clock_retry) {
-        uart::write("Clock not stable within timeout\n");
+    auto itrp = interrupt::get(bus->interrupt);
+    if (itrp.is_error()) {
+        this->last_error = itrp;
+        // if we have an error clear it
+        bus->interrupt = all_mask;
         return false;
     }
 

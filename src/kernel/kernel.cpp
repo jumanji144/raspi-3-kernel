@@ -35,8 +35,6 @@ extern "C" void kernel_main(u64 dtb_ptr32)
 
     uart::init();
 
-    constexpr gpu::pixel cyan = {51, 255, 189};
-
     uart::write("Hello, world!\n");
 
     gpu::buffer buffer = gpu::allocate_framebuffer(1024, 768, 32);
@@ -47,18 +45,24 @@ extern "C" void kernel_main(u64 dtb_ptr32)
 
     emmc::sd sd;
 
-    if(!sd.init()) {
+    if (sd.init()) {
+        uart::write("SD card initialized\n");
+    } else {
         uart::write("Failed to initialize SD card\n");
         return;
     }
 
     u8 buf[512];
-    sd.transfer_data(0, buf, 1, false);
 
-    // print data as hex
-    for (u32 i = 0; i < 64; i++) {
-        uart::write("{:02x} ", buf[i]);
+    if(sd.read(0, buf, 512)) {
+        int i = 0;
+        for (const auto &item: buf) {
+            if (i++ % 16 == 0)
+                uart::write("\n");
+            uart::write("{:02x} ", item);
+        }
     }
+
 
     return;
 }

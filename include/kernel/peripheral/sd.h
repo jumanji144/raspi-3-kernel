@@ -1,95 +1,94 @@
 #pragma once
 #include <kernel/peripheral/emmc.h>
 
+#define SD_OK                0
+#define SD_TIMEOUT          (-1)
+#define SD_ERROR            (-2)
+
 namespace emmc {
 
-    // commands
-    static constexpr reg::cmdtm cmd_go_to_idle = {};
-    static constexpr reg::cmdtm cmd_send_if_cond = { .rspns_type = reg::rt48, .crcchk_en = true, .index = 8 };
-    static constexpr reg::cmdtm cmd_send_cid = { .rspns_type = reg::rt136, .crcchk_en = true, .index = 2 };
-    static constexpr reg::cmdtm cmd_send_rca = { .rspns_type = reg::rt48, .crcchk_en = true, .index = 3 };
-    static constexpr reg::cmdtm cmd_set_bus_width = { .rspns_type = reg::rt48, .crcchk_en = true, .index = 6 };
-    static constexpr reg::cmdtm cmd_select_card = { .rspns_type = reg::rt48, .crcchk_en = true, .index = 7 };
-    static constexpr reg::cmdtm cmd_set_blocklen = { .rspns_type = reg::rt48, .crcchk_en = true, .index = 16 };
-    static constexpr reg::cmdtm cmd_set_blockcnt = { .rspns_type = reg::rt48, .crcchk_en = true, .index = 23 };
+    namespace cmd {
+        // normal commands
+        constexpr reg::cmdtm go_idle_state = { .index = 0 };
+        constexpr reg::cmdtm all_send_cid = { .rspns_type = reg::res_type::rt136, .index = 2 };
+        constexpr reg::cmdtm send_relative_addr = { .rspns_type = reg::res_type::rt48, .index = 3 };
+        constexpr reg::cmdtm select_card = { .rspns_type = reg::res_type::rt48, .index = 7 };
+        constexpr reg::cmdtm send_if_cond = { .rspns_type = reg::res_type::rt48, .index = 8 };
 
-    static constexpr reg::cmdtm cmd_read_single = {
-            .dir = reg::data_dir::card_to_host, .rspns_type = reg::rt48, .crcchk_en = true, .isdata = true, .index = 17
-    };
-    static constexpr reg::cmdtm cmd_read_multiple = {
-            .dir = reg::data_dir::card_to_host, .rspns_type = reg::rt48, .crcchk_en = true, .isdata = true, .index = 18
-    };
+        // app commands
+        constexpr reg::cmdtm app_cmd = { .rspns_type = reg::res_type::rt48, .index = 55 };
+        constexpr reg::cmdtm set_bus_width = { .rspns_type = reg::res_type::rt48, .index = 6 };
+        constexpr reg::cmdtm send_op_cond = { .rspns_type = reg::res_type::rt48, .index = 41 };
+        constexpr reg::cmdtm send_scr = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
+                                          .isdata = true, .index = 51 };
 
-    static constexpr reg::cmdtm cmd_write_single = {
-            .dir = reg::data_dir::host_to_card, .rspns_type = reg::rt48, .crcchk_en = true, .isdata = true, .index = 24
-    };
-    static constexpr reg::cmdtm cmd_write_multiple = {
-            .dir = reg::data_dir::host_to_card, .rspns_type = reg::rt48, .crcchk_en = true, .isdata = true, .index = 25
-    };
+        // data transfer commands
+        constexpr reg::cmdtm read_single_block = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
+                                                   .isdata = true, .index = 17 };
+        constexpr reg::cmdtm read_multiple_block = { .dir = reg::data_dir::card_to_host, .multi_blk = true,
+                                                     .rspns_type = reg::res_type::rt48, .isdata = true, .index = 18 };
 
-    // app commands
+        constexpr reg::cmdtm write_single_block = { .dir = reg::data_dir::host_to_card, .rspns_type = reg::res_type::rt48,
+                                                    .isdata = true, .index = 24 };
+        constexpr reg::cmdtm write_multiple_block = { .dir = reg::data_dir::host_to_card, .multi_blk = true,
+                                                     .rspns_type = reg::res_type::rt48, .isdata = true, .index = 25 };
+    }
 
-    static constexpr reg::cmdtm cmd_app_cmd = { .rspns_type = reg::rt48,  .index = 55 };
-    static constexpr reg::cmdtm cmd_send_op_cond = { .rspns_type = reg::rt48, .index = 41 };
-    static constexpr reg::cmdtm cmd_send_scr = {
-            .dir = reg::data_dir::card_to_host, .rspns_type = reg::rt48, .isdata = true, .index = 51
-    };
+    namespace ocr {
+        constexpr u32 base = 0x00FF8000;
+        constexpr u32 sdhc = 1 << 30;
+        constexpr u32 sdxc = 1 << 28;
+        constexpr u32 voltage_1_8 = 1 << 24;
+    }
 
     namespace reg {
         struct scr {
             unsigned reserved0 : 32;
-            // cmd support for CMD20, CMD23, CMD48/49, CMD58/59
-            u8 cmd_support : 4;
-            unsigned reserved1 : 6;
-            bool sd_spec4 : 1;
+            u8 cmd_support : 5;
+            unsigned reserved1 : 1;
+            bool sd_spec_x : 1;
+            bool sd_spec_4 : 1;
             u8 ex_security : 4;
-            bool sd_spec3 : 1;
-            // bus width support 1bit, res, 4bit, res
+            bool sd_spec_3 : 1;
             u8 sd_bus_widths : 4;
-            u8 sd_security : 3;
+            u8 sd_security : 2;
             bool data_stat_after_erase : 1;
             u8 sd_spec : 4;
             u8 scr_structure : 4;
         };
     }
 
-    class sd : public emmc::device {
-        inline static constexpr u32 clock_rate_iden = 400000; // 400kHz
-        inline static constexpr u32 clock_rate_data = 25000000; // 25MHz
-        inline static constexpr u32 clock_rate_data_hs = 50000000; // 50MHz
-
-        inline static constexpr u32 clock_speed_base = 41666666; // 41.666666MHz
+    class sd : public device {
+        static constexpr u32 clock_rate_identification = 400000;
+        static constexpr u32 clock_rate_normal = 25000000;
+        static constexpr u32 clock_rate_high = 50000000;
     public:
-        sd() : device() {
-            this->base_clock = clock_speed_base;
+        bool init() override;
+
+        bool read(u64 address, u8* buffer, size_t size) {
+            return common_io_op(address, buffer, size, false);
+        }
+        bool write(u64 address, const u8* buffer, size_t size) {
+            return common_io_op(address, const_cast<u8*>(buffer), size, true);
         }
 
-        bool init() override;
-        static bool power_on();
-        static bool power_off();
-        //bool reset() override;
+    protected:
+        bool common_io_op(u64 address, u8* buffer, size_t size, bool write);
+        bool transfer_block(u32 lba, u32* buffer, u32 num, bool write = false);
+        bool send_app_command(reg::cmdtm command, u32 arg);
 
-        u32 transfer_data(addr lba, u8* buffer, u32 blocks, bool write);
+        [[nodiscard]] u32 get_base_clock_rate() const override;
+        [[nodiscard]] bool set_clock_rate(u32 rate) const override;
 
-    private:
-        bool get_base_clock();
-        bool send_app_command(reg::cmdtm cmd, u32 arg);
-        bool check_v2();
-        bool check_op_cond();
-        bool read_cid();
-        bool get_scr();
-        bool set_initial_clock();
-
-        bool setup_hc_transfer(u32 blocks);
-
-        bool v2 = false;
-        bool high_capacity = false;
-
-        u16 ocr = 0;
-        u8 cid[16]{};
-        u32 relative_card_address = 0;
-
-        alignas(8) reg::scr scr{};
+        u32 rca {};
+        u32 cid[4];
+        alignas(sizeof(reg::scr)) reg::scr scr {};
+        bool sdhc {};
+        bool sdxc {};
+        bool voltage_1_8 {};
     };
 
 }
+
+int sd_init();
+int sd_readblock(unsigned int lba, unsigned char *buffer, unsigned int num);

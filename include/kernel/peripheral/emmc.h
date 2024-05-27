@@ -1,10 +1,12 @@
 #pragma once
 #include <common.h>
+#include <common/format.h>
 #include <kernel/peripheral/peripheral.h>
 
 namespace emmc {
 
     namespace reg {
+
         struct blksizecnt {
             u16 blksize : 10;
             u16 reserved : 6;
@@ -67,109 +69,39 @@ namespace emmc {
             unsigned reserved2 : 3;
         };
 
-        union control0 {
-            struct {
-                unsigned res0: 1;
-                bool hctl_dwidth: 1;
-                bool hctl_hs_en: 1;
-                unsigned res1: 2;
-                bool hctl_8bit_en: 1;
-                unsigned res2: 10;
-                bool gap_stop: 1;
-                bool gap_restart: 1;
-                bool readwait_en: 1;
-                bool gap_intr_en: 1;
-                bool spi_mode: 1;
-                bool boot_en: 1;
-                bool alt_boot: 1;
-                unsigned res3: 9;
-            };
-            u32 raw;
-        };
-
-        union control1 {
-            struct {
-                bool clk_intlen: 1;
-                bool clk_stable: 1;
-                bool clk_en: 1;
-                unsigned res0: 2;
-                bool clk_gensel: 1;
-                u8 clk_freq_ms2: 2;
-                u8 clk_freq8: 8;
-                u8 data_tounit: 4;
-                unsigned res1: 4;
-                bool srst_hc: 1;
-                bool srst_cmd: 1;
-                bool srst_dat: 1;
-                unsigned res2: 5;
-            };
-            u32 raw;
-        };
-
-        union interrupt {
-            struct {
-                bool cmd_done: 1;
-                bool data_done: 1;
-                bool block_gap: 1;
-                unsigned reserved0: 1{};
-                bool write_ready: 1;
-                bool read_ready: 1;
-                unsigned reserved1: 2{};
-                bool card_interr: 1;
-                unsigned reserved2: 3{};
-                bool retune_req: 1;
-                bool boot_ack_rcvd: 1;
-                bool boot_term: 1;
-                bool ack_err: 1;
-                bool cmd_timeout: 1;
-                bool crc_err: 1;
-                bool end_bit_err: 1;
-                bool index_err: 1;
-                bool data_timeout: 1;
-                bool data_crc_err: 1;
-                bool data_end_bit_err: 1;
-                unsigned reserved3: 1{};
-                bool acmd_err: 1;
-                unsigned reserved4: 7{};
-            };
-            u32 raw;
+        struct interrupt {
+            bool cmd_done: 1;
+            bool data_done: 1;
+            bool block_gap: 1;
+            unsigned reserved0: 1{};
+            bool write_ready: 1;
+            bool read_ready: 1;
+            unsigned reserved1: 2{};
+            bool card_interr: 1;
+            unsigned reserved2: 3{};
+            bool retune_req: 1;
+            bool boot_ack_rcvd: 1;
+            bool boot_term: 1;
+            bool ack_err: 1;
+            bool cmd_timeout: 1;
+            bool crc_err: 1;
+            bool end_bit_err: 1;
+            bool index_err: 1;
+            bool data_timeout: 1;
+            bool data_crc_err: 1;
+            bool data_end_bit_err: 1;
+            unsigned reserved3: 1{};
+            bool acmd_err: 1;
+            unsigned reserved4: 7{};
 
             [[nodiscard]] bool is_error() const volatile {
                 return ack_err || cmd_timeout || crc_err || end_bit_err || index_err || data_timeout || data_crc_err ||
                        data_end_bit_err || acmd_err;
             };
 
-            void disable_all() volatile {
-                this->raw = 0;
+            [[nodiscard]] bool is_timeout() const volatile {
+                return cmd_timeout || data_timeout;
             };
-
-            void enable_all() volatile {
-                this->raw = 0xFFFFFFFF;
-            }
-
-            void clear_error() volatile {
-                ack_err = true; cmd_timeout = true; crc_err = true; end_bit_err = true; index_err = true;
-                data_timeout = true; data_crc_err = true; data_end_bit_err = true;acmd_err = true;
-            };
-        };
-
-        union control2 {
-            struct {
-                bool acnox_err: 1;
-                bool acto_err: 1;
-                bool acrc_err: 1;
-                bool aend_err: 1;
-                bool abad_err: 1;
-                unsigned reserved0: 2;
-                bool notc12_err: 1;
-                unsigned reserved1: 8;
-                u8 uhsmode: 3;
-                unsigned reserved2: 4;
-                bool tuneon: 1;
-                bool tuned: 1;
-                unsigned reserved3: 6;
-            };
-            u32 raw;
         };
 
         struct slotisr_ver {
@@ -181,24 +113,83 @@ namespace emmc {
 
     }
 
+    namespace control0 {
+        constexpr u32 hctl_hs_en = 1 << 2;
+        constexpr u32 hctl_dwidth = 1 << 1;
+    }
+
+    namespace control1 {
+        constexpr u32 srst_hc = 1 << 24;
+        constexpr u32 srst_cmd = 1 << 25;
+        constexpr u32 srst_data = 1 << 26;
+
+        constexpr u32 clk_div_mask = 0x3ff << 6;
+
+        constexpr u32 tounit(u32 x) {
+            if(x > 0xF) unreachable();
+            return x << 16;
+        }
+
+        constexpr u32 clk_en = 1 << 2;
+        constexpr u32 clk_stable = 1 << 1;
+        constexpr u32 clk_intlen = 1 << 0;
+    }
+
+    namespace status {
+        constexpr u32 cmd_inhibit = 1 << 0;
+        constexpr u32 dat_inhibit = 1 << 1;
+        constexpr u32 dat_active = 1 << 2;
+        constexpr u32 write_transfer = 1 << 8;
+        constexpr u32 read_transfer = 1 << 9;
+    }
+
+    namespace interrupt {
+
+        constexpr u32 cmd_done = 1 << 0;
+        constexpr u32 write_ready = 1 << 4;
+        constexpr u32 read_ready = 1 << 5;
+
+        constexpr u32 error_mask = 0xffff0000;
+
+        inline reg::interrupt get(u32 val) {
+            return *reinterpret_cast<reg::interrupt*>(&val);
+        }
+
+    }
+
+    namespace slotisr_ver {
+
+        inline reg::slotisr_ver get(u32 val) {
+            return *reinterpret_cast<reg::slotisr_ver*>(&val);
+        }
+
+    }
+
+    enum host_spec {
+        v1 = 0,
+        v2 = 1,
+        v3 = 2
+    };
+
+
     struct regs {
         u32 arg2;
-        reg::blksizecnt blksizecnt;
+        u32 blksizecnt;
         u32 arg1;
-        reg::cmdtm cmdtm;
+        u32 cmdtm;
         u32 resp[4];
         u32 data;
-        reg::status status;
-        reg::control0 control0;
-        reg::control1 control1;
-        reg::interrupt interrupt;
-        reg::interrupt interrupt_mask;
-        reg::interrupt interrupt_en;
-        reg::control2 control2;
+        u32 status;
+        u32 control0;
+        u32 control1;
+        u32 interrupt;
+        u32 interrupt_mask;
+        u32 interrupt_en;
+        u32 control2;
         u32 capabilities1;
         u32 capabilities2;
         u32 reserved0[2]; // 0x48 - 0x50
-        reg::interrupt force_irpt;
+        u32 force_irpt;
         u32 reserved1[7]; // 0x54 - 0x70
         u32 boot_timeout;
         u32 dbg_sel;
@@ -211,7 +202,7 @@ namespace emmc {
         u32 reserved3[0x17]; // 0x94 - 0xF0
         u32 spi_int_spt;
         u32 reserved4[2]; // 0xF4 - 0xFC
-        reg::slotisr_ver slotisr_ver;
+        u32 slotisr_ver;
     };
 
     static volatile regs* bus = (volatile regs*)peripheral::emmc;
@@ -223,39 +214,34 @@ namespace emmc {
         device& operator=(const device&) = delete;
 
         virtual bool init();
-        virtual bool reset();
-        bool reset_command();
-        bool send_command(reg::cmdtm, u32 arg);
-        bool set_clock(u32 freq);
 
-    protected:
-        [[nodiscard]] u32 get_clock_divider(u32 freq) const;
-        bool data_transfer(reg::cmdtm command);
-        bool transfer_block(bool write, u32* buffer);
-
-        using tout_func = bool(*)();
-
-        static bool timeout_wait(tout_func func, u32 max) {
-            u32 _tout = 0;
-            for(; _tout < max; _tout++) {
-                if (func()) {
-                    break;
-                }
-            }
-            return _tout < max;
+        [[nodiscard]] const u32& get_block_size() const {
+            return this->block_size;
         }
 
-        reg::interrupt error{};
-        u32* buffer = nullptr;
-        u64 base_clock = 0;
-        u32 response[4]{};
-        u32 blocks = 0;
+    protected:
+        bool wait_for_interrupt(u32 mask, bool clear = true, u32 timeout = 100000);
+
+        [[nodiscard]] virtual u32 get_base_clock_rate() const = 0;
+        [[nodiscard]] virtual bool set_clock_rate(u32 rate) const = 0;
+
+        bool send_command(reg::cmdtm command, u32 arg);
+        bool reset_command();
+
+        bool do_data_transfer(bool write);
+
+        u32 host_version {};
+        u32 base_clock_rate{};
+
+        u32 response[4];
+
+        u32 blocks_to_transfer = 0;
         u32 block_size = 0;
-        u32 capabilities1{};
-        u32 capabilities2{};
-        u8 spec{};
-        u8 vendor{};
-        bool success = false;
+
+        u32* buffer = nullptr;
+
+        reg::interrupt last_error;
+        bool last_timeout = false;
     };
 
 }
