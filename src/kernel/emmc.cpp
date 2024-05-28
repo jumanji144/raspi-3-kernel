@@ -104,6 +104,7 @@ bool emmc::device::reset_command() {
 
 bool emmc::device::do_data_transfer(bool write) {
     u32 wait_mask = write ? interrupt::write_ready : interrupt::read_ready;
+    u32* buf = this->buffer;
 
     for (int blk = 0; blk < this->blocks_to_transfer; blk++) {
         // don't clear bit so we can re-use this function to check for errors
@@ -114,11 +115,11 @@ bool emmc::device::do_data_transfer(bool write) {
         u32 length = this->block_size;
         if (write) {
             for (; length > 0; length -= 4) {
-                bus->data = *this->buffer++;
+                bus->data = *buf++;
             }
         } else {
             for (; length > 0; length -= 4) {
-                *this->buffer++ = bus->data;
+                *buf++ = bus->data;
             }
         }
     }

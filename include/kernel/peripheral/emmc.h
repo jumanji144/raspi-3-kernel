@@ -141,6 +141,10 @@ namespace emmc {
         constexpr u32 dat_active = 1 << 2;
         constexpr u32 write_transfer = 1 << 8;
         constexpr u32 read_transfer = 1 << 9;
+
+        constexpr u8 dat_level0(u32 val) {
+            return (val >> 20) & 0xf;
+        }
     }
 
     namespace interrupt {

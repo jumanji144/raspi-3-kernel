@@ -93,7 +93,17 @@ bool emmc::sd::init() {
 
     uart::write("EMMC: sd card supports SDHC: {}, SDXC: {}, 1.8V: {}\n", sdhc, sdxc, voltage_1_8);
 
-    // TODO: if the sd card supports 1.8V, then we should switch
+    // if config has 1.8V enabled and we support it, then do a voltage switch
+    if (voltage_1_8 && cfg.enable_1_8V) {
+        if (!voltage_switch()) {
+            // in this case the card refused to switch to 1.8V or is already in 1.8V mode
+            // we don't want to abort the card initialization process, so we just call init again
+            // but without 1.8V support
+            cfg.enable_1_8V = false;
+
+            return this->init();
+        }
+    }
 
     // the send op cond command sets the card into the ready state, now we can go into the identification state
 
@@ -159,7 +169,11 @@ bool emmc::sd::init() {
 
     this->scr = *(reg::scr*)buf;
 
-    // TODO: switch over to SDHC mode
+    if (this->host_version > 1 && cfg.enable_high_speed) {
+        if (!high_speed_switch()) {
+            return false;
+        }
+    }
 
     // now we can check if we can use 4 bit data transfer or only 1 bit
     if (this->scr.sd_bus_widths & 4) { // 4 bit supported
@@ -173,9 +187,98 @@ bool emmc::sd::init() {
     }
 
     // set the block size to the full 512 bytes
-    this-> block_size = 512;
+    this->block_size = 512;
 
     // now we are ready to transfer data
+
+    return true;
+}
+
+bool emmc::sd::voltage_switch() {
+    if (!send_command(cmd::voltage_switch, 0)) {
+        uart::write("EMMC: failed to send voltage switch\n");
+        return false;
+    }
+
+    // now we need to check if the data lines went high
+
+    u8 data = status::dat_level0(bus->status); // get data lines from the status register
+    if (data != 0b1111) {
+        uart::write("EMMC: data lines did not go high after voltage switch\n");
+        return false;
+    }
+
+    return true;
+}
+
+bool emmc::sd::high_speed_switch() {
+    u8 resp[64]; // 512 bit function response register
+
+    this->buffer = reinterpret_cast<u32*>(resp);
+    this->block_size = 64;
+    this->blocks_to_transfer = 1;
+
+    // inquiry the function register in group one access mode for access modes
+    if (!send_command(cmd::switch_func, 0x00FFFFF0)) {
+        uart::write("EMMC: failed to send switch func\n");
+        return false;
+    }
+
+    // check if our card supports high speed
+    // function support group 1 contains a bit field with all the supported functions
+    // its in the area: 415:400, because the structure is in big endian, byte 14
+    // represents the lower byte of the support group one
+    u8 support_group1 = resp[13];
+
+    // according to the sd specification bits 0 - 4 select the following speeds:
+    // 0: SDR12
+    // 1: SDR25
+    // 2: SDR50
+    // 3: SDR104
+    // 4: DDR50
+
+    // where sdr12 is always supported
+
+    bool sdr25 = support_group1 >> 1 & 1;
+    bool sdr50 = support_group1 >> 2 & 1;
+    bool sdr104 = support_group1 >> 3 & 1;
+    bool ddr50 = support_group1 >> 4 & 1;
+
+    uart::write("EMMC: sd card supports SDR25: {}, SDR50: {}, SDR104: {}, DDR50: {}\n", sdr25, sdr50, sdr104, ddr50);
+
+    // select the highest speed that is supported
+    // note:: ddr50 only uses 50Mhz but has a transfer rate of 50 MB/s, therefore it is above sdr25, and we favor it
+    // over sdr50
+    u32 switch_mode = 0;
+    u32 clock_rate = 0;
+    if (sdr104) {
+        switch_mode = 0x80FFFFF3;
+        clock_rate = clock_rate_sdr104;
+    } else if (ddr50) {
+        switch_mode = 0x80FFFFF4;
+        clock_rate = clock_rate_ddr50;
+    } else if (sdr50) {
+        switch_mode = 0x80FFFFF2;
+        clock_rate = clock_rate_sdr50;
+    } else if (sdr25) {
+        switch_mode = 0x80FFFFF1;
+        clock_rate = clock_rate_sdr25;
+    } else {
+        // none are supported, but that's ok
+        return true;
+    }
+
+    uart::write("EMMC: switching to {}MHz\n", clock_rate / 1000000);
+
+    if (!send_command(cmd::switch_func, switch_mode)) {
+        uart::write("EMMC: failed to send switch func\n");
+        return false;
+    }
+
+    if (!set_clock_rate(clock_rate)) {
+        uart::write("EMMC: failed to set clock rate\n");
+        return false;
+    }
 
     return true;
 }

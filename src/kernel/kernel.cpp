@@ -43,7 +43,10 @@ extern "C" void kernel_main(u64 dtb_ptr32)
 
     buffer.puts("Hello, world!");
 
-    emmc::sd sd;
+    emmc::sd sd({
+        .enable_high_speed = true,
+        .enable_1_8V = true
+    });
 
     if (sd.init()) {
         uart::write("SD card initialized\n");

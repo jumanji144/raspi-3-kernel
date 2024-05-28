@@ -11,9 +11,12 @@ namespace emmc {
         // normal commands
         constexpr reg::cmdtm go_idle_state = { .index = 0 };
         constexpr reg::cmdtm all_send_cid = { .rspns_type = reg::res_type::rt136, .index = 2 };
+        constexpr reg::cmdtm switch_func = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
+                                            .isdata = true, .index = 6 };
         constexpr reg::cmdtm send_relative_addr = { .rspns_type = reg::res_type::rt48, .index = 3 };
         constexpr reg::cmdtm select_card = { .rspns_type = reg::res_type::rt48, .index = 7 };
         constexpr reg::cmdtm send_if_cond = { .rspns_type = reg::res_type::rt48, .index = 8 };
+        constexpr reg::cmdtm voltage_switch = { .rspns_type = reg::res_type::rt48, .index = 11 };
 
         // app commands
         constexpr reg::cmdtm app_cmd = { .rspns_type = reg::res_type::rt48, .index = 55 };
@@ -60,9 +63,21 @@ namespace emmc {
 
     class sd : public device {
         static constexpr u32 clock_rate_identification = 400000;
-        static constexpr u32 clock_rate_normal = 25000000;
-        static constexpr u32 clock_rate_high = 50000000;
+        static constexpr u32 clock_rate_normal = 25000000; // 25Mhz, 12.5MB/s
+        static constexpr u32 clock_rate_sdr25 = 50000000; // 50Mhz, 25MB/s
+        static constexpr u32 clock_rate_sdr50 = 100000000; // 100Mhz, 50MB/s
+        static constexpr u32 clock_rate_sdr104 = 208000000; // 208Mhz, 104MB/s
+        static constexpr u32 clock_rate_ddr50 = 50000000; // 50Mhz, 50MB/s
     public:
+
+        struct config {
+            bool enable_high_speed {};
+            bool enable_1_8V {};
+        };
+
+        sd(config cfg) : cfg(cfg) {}
+        sd() = default;
+
         bool init() override;
 
         bool read(u64 address, u8* buffer, size_t size) {
@@ -72,17 +87,22 @@ namespace emmc {
             return common_io_op(address, const_cast<u8*>(buffer), size, true);
         }
 
+        bool transfer_block(u32 lba, u32* buffer, u32 num, bool write = false);
+
     protected:
         bool common_io_op(u64 address, u8* buffer, size_t size, bool write);
-        bool transfer_block(u32 lba, u32* buffer, u32 num, bool write = false);
         bool send_app_command(reg::cmdtm command, u32 arg);
+
+        bool voltage_switch();
+        bool high_speed_switch();
 
         [[nodiscard]] u32 get_base_clock_rate() const override;
         [[nodiscard]] bool set_clock_rate(u32 rate) const override;
 
         u32 rca {};
-        u32 cid[4];
+        config cfg {};
         alignas(sizeof(reg::scr)) reg::scr scr {};
+        alignas(sizeof(u64)) u32 cid[4]{};
         bool sdhc {};
         bool sdxc {};
         bool voltage_1_8 {};
