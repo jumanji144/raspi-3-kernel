@@ -161,6 +161,12 @@ namespace emmc {
 
     }
 
+    namespace csd {
+
+        constexpr u32 c_size_1_byte = 0x3f;
+
+    }
+
     namespace slotisr_ver {
 
         inline reg::slotisr_ver get(u32 val) {
@@ -209,21 +215,45 @@ namespace emmc {
         u32 slotisr_ver;
     };
 
+    namespace cmd {
+        // normal commands
+        constexpr reg::cmdtm go_idle_state = { .index = 0 };
+        constexpr reg::cmdtm all_send_cid = { .rspns_type = reg::res_type::rt136, .index = 2 };
+        constexpr reg::cmdtm switch_func = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
+                .isdata = true, .index = 6 };
+        constexpr reg::cmdtm send_relative_addr = { .rspns_type = reg::res_type::rt48, .index = 3 };
+        constexpr reg::cmdtm select_card = { .rspns_type = reg::res_type::rt48, .index = 7 };
+        constexpr reg::cmdtm send_if_cond = { .rspns_type = reg::res_type::rt48, .index = 8 };
+        constexpr reg::cmdtm send_csd = { .rspns_type = reg::res_type::rt136, .index = 9 };
+        constexpr reg::cmdtm voltage_switch = { .rspns_type = reg::res_type::rt48, .index = 11 };
+
+        // app command
+        constexpr reg::cmdtm app_cmd = { .rspns_type = reg::res_type::rt48, .index = 55 };
+
+        // data transfer commands
+        constexpr reg::cmdtm read_single_block = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
+                .isdata = true, .index = 17 };
+        constexpr reg::cmdtm read_multiple_block = { .dir = reg::data_dir::card_to_host, .multi_blk = true,
+                .rspns_type = reg::res_type::rt48, .isdata = true, .index = 18 };
+
+        constexpr reg::cmdtm write_single_block = { .dir = reg::data_dir::host_to_card, .rspns_type = reg::res_type::rt48,
+                .isdata = true, .index = 24 };
+        constexpr reg::cmdtm write_multiple_block = { .dir = reg::data_dir::host_to_card, .multi_blk = true,
+                .rspns_type = reg::res_type::rt48, .isdata = true, .index = 25 };
+
+    }
+
     static volatile regs* bus = (volatile regs*)peripheral::emmc;
 
     class device {
     public:
         device() = default;
-        device(const device&) = delete;
-        device& operator=(const device&) = delete;
 
         virtual bool init();
 
-        [[nodiscard]] const u32& get_block_size() const {
-            return this->block_size;
-        }
+        bool transfer_block(u32 lba, u32* buffer, u32 num, bool write = false);
+        bool send_app_command(reg::cmdtm command, u32 arg);
 
-    protected:
         bool wait_for_interrupt(u32 mask, bool clear = true, u32 timeout = 100000);
 
         [[nodiscard]] virtual u32 get_base_clock_rate() const = 0;
@@ -237,12 +267,19 @@ namespace emmc {
         u32 host_version {};
         u32 base_clock_rate{};
 
-        u32 response[4];
+        bool byte_access_mode = false;
+
+        u32 rca {};
+        alignas(sizeof(u64)) u8 csd[16]{};
+        alignas(sizeof(u64)) u32 cid[4]{};
+
+        alignas(sizeof(u64)) u32 response[4]{};
 
         u32 blocks_to_transfer = 0;
         u32 block_size = 0;
+        u32 block_count = 0;
 
-        u32* buffer = nullptr;
+        alignas(sizeof(addr)) u32* buffer = nullptr;
 
         reg::interrupt last_error;
         bool last_timeout = false;

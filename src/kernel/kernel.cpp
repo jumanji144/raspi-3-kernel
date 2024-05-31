@@ -3,6 +3,7 @@
 #include <kernel/mailbox/board.h>
 #include <kernel/gpu/buffer.h>
 #include <kernel/peripheral/sd.h>
+#include "kernel/devices/sd.h"
 
 void print_board_info() {
     mailbox::property_message<board::serial_request, board::firmware_revision_request, board::board_model_request,
@@ -57,14 +58,16 @@ extern "C" void kernel_main(u64 dtb_ptr32)
 
     u8 buf[512];
 
-    if(sd.read(0, buf, 512)) {
-        int i = 0;
-        for (const auto &item: buf) {
-            if (i++ % 16 == 0)
-                uart::write("\n");
-            uart::write("{:02x} ", item);
-        }
-    }
+    dev::sd_dev dev(sd);
+
+    u32 block_size = 0;
+    u32 total_blocks = 0;
+    dev.ioctl(dev::ioctl_get_sector_size, &block_size);
+    dev.ioctl(dev::ioctl_get_sector_count, &total_blocks);
+
+    u64 size = block_size * total_blocks;
+
+    uart::write("SD card size: {}MB\n", size / 1024 / 1024);
 
 
     return;

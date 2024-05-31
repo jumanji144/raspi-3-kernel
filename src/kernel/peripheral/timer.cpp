@@ -1,5 +1,5 @@
-#include <kernel/peripheral/timer.h>
-#include <kernel/asm.h>
+#include "kernel/peripheral/timer.h"
+#include "kernel/asm.h"
 
 u64 timer::get_system_timer() {
     u32 hi = peripheral::read<u32>(timer_hi);

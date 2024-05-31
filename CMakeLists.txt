@@ -13,15 +13,17 @@ add_executable(raspi
 
         src/kernel/boot.S
         src/kernel/kernel.cpp
-        src/kernel/uart1.cpp
+        src/kernel/peripheral/uart1.cpp
         src/kernel/exception.cpp
-        src/kernel/mailbox.cpp
+        src/kernel/peripheral/mailbox.cpp
         src/kernel/buffer.cpp
-        src/kernel/gpu.cpp
-        src/kernel/timer.cpp
-        src/kernel/emmc.cpp
-        src/kernel/gpio.cpp
-        src/kernel/sd.cpp
+        src/kernel/peripheral/gpu.cpp
+        src/kernel/peripheral/timer.cpp
+        src/kernel/peripheral/emmc.cpp
+        src/kernel/peripheral/gpio.cpp
+        src/kernel/peripheral/sd.cpp
+        src/kernel/devices/sd.cpp
+        src/kernel/devices/emmc.cpp
 )
 
 include_directories(include)

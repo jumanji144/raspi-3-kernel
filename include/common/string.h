@@ -5,6 +5,14 @@
 
 namespace str {
 
+    constexpr size_t strlen(const char* str) {
+        size_t len = 0;
+        while (str[len] != '\0') {
+            len++;
+        }
+        return len;
+    }
+
     struct view {
         const char* data;
         size_t size;
@@ -16,17 +24,12 @@ namespace str {
         explicit operator const char*() const {
             return data;
         }
+
+        constexpr view(const char* data, size_t size) : data(data), size(size) {}
+        constexpr view(const char* data) : data(data), size(str::strlen(data)) {}
     };
 
     inline constexpr view empty_view = { "", 0 };
-
-    constexpr size_t strlen(const char* str) {
-        size_t len = 0;
-        while (str[len] != '\0') {
-            len++;
-        }
-        return len;
-    }
 
     struct string {
         char* data;

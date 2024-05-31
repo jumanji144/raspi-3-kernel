@@ -1,8 +1,8 @@
-#include <kernel/peripheral/emmc.h>
-#include <kernel/peripheral/gpio.h>
+#include "kernel/peripheral/emmc.h"
+#include "kernel/peripheral/gpio.h"
 #include "kernel/peripheral/timer.h"
 #include "kernel/peripheral/uart1.h"
-#include <common/memory/mem.h>
+#include "common/memory/mem.h"
 
 bool emmc::device::init() {
     host_version = slotisr_ver::get(bus->slotisr_ver).sdversion;
@@ -89,6 +89,20 @@ bool emmc::device::send_command(reg::cmdtm command, u32 arg) {
     return true;
 }
 
+bool emmc::device::send_app_command(reg::cmdtm command, u32 arg) {
+    if (!send_command(cmd::app_cmd, rca)) {
+        uart::write("EMMC: failed to send app command\n");
+        return false;
+    }
+
+    if (rca != 0 && response[0] == 0) {
+        uart::write("EMMC: invalid app command response\n");
+        return false;
+    }
+
+    return send_command(command, arg);
+}
+
 bool emmc::device::reset_command() {
     bus->control1 |= control1::srst_cmd;
     u32 tout = 0;
@@ -156,4 +170,48 @@ bool emmc::device::wait_for_interrupt(u32 mask, bool clear, u32 timeout) {
     }
 
     return true;
+}
+
+bool emmc::device::transfer_block(u32 lba, u32 *buf, u32 num, bool write) {
+    // wait for data inhibit flag
+    u32 tout = 0;
+    for (; tout < 10000; ++tout) {
+        timer::wait_us(10);
+        if (!(bus->status & status::dat_inhibit)) {
+            break;
+        }
+    }
+
+    if (tout == 10000) {
+        uart::write("EMMC: timeout waiting for data inhibit\n");
+        return false;
+    }
+
+    this->blocks_to_transfer = num;
+
+    reg::cmdtm command;
+    if (write) {
+        if (num == 1) {
+            command = cmd::write_single_block;
+        } else {
+            command = cmd::write_multiple_block;
+        }
+    } else {
+        if (num == 1) {
+            command = cmd::read_single_block;
+        } else {
+            command = cmd::read_multiple_block;
+        }
+    }
+
+    this->buffer = buf;
+
+    for (int i = 0; i < 4; i++) {
+        if (send_command(command, lba)) {
+            return true;
+        }
+    }
+
+    uart::write("EMMC: failed to transfer block\n");
+    return false;
 }

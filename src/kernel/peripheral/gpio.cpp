@@ -1,5 +1,5 @@
-#include <kernel/peripheral/gpio.h>
-#include <kernel/peripheral/timer.h>
+#include "kernel/peripheral/gpio.h"
+#include "kernel/peripheral/timer.h"
 
 void gpio::disable_pulling(u8 pin) {
     peripheral::write<u32>(gppud, 0); // disable pull up/down

@@ -8,33 +8,13 @@
 namespace emmc {
 
     namespace cmd {
-        // normal commands
-        constexpr reg::cmdtm go_idle_state = { .index = 0 };
-        constexpr reg::cmdtm all_send_cid = { .rspns_type = reg::res_type::rt136, .index = 2 };
-        constexpr reg::cmdtm switch_func = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
-                                            .isdata = true, .index = 6 };
-        constexpr reg::cmdtm send_relative_addr = { .rspns_type = reg::res_type::rt48, .index = 3 };
-        constexpr reg::cmdtm select_card = { .rspns_type = reg::res_type::rt48, .index = 7 };
-        constexpr reg::cmdtm send_if_cond = { .rspns_type = reg::res_type::rt48, .index = 8 };
-        constexpr reg::cmdtm voltage_switch = { .rspns_type = reg::res_type::rt48, .index = 11 };
 
         // app commands
-        constexpr reg::cmdtm app_cmd = { .rspns_type = reg::res_type::rt48, .index = 55 };
         constexpr reg::cmdtm set_bus_width = { .rspns_type = reg::res_type::rt48, .index = 6 };
         constexpr reg::cmdtm send_op_cond = { .rspns_type = reg::res_type::rt48, .index = 41 };
         constexpr reg::cmdtm send_scr = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
                                           .isdata = true, .index = 51 };
 
-        // data transfer commands
-        constexpr reg::cmdtm read_single_block = { .dir = reg::data_dir::card_to_host, .rspns_type = reg::res_type::rt48,
-                                                   .isdata = true, .index = 17 };
-        constexpr reg::cmdtm read_multiple_block = { .dir = reg::data_dir::card_to_host, .multi_blk = true,
-                                                     .rspns_type = reg::res_type::rt48, .isdata = true, .index = 18 };
-
-        constexpr reg::cmdtm write_single_block = { .dir = reg::data_dir::host_to_card, .rspns_type = reg::res_type::rt48,
-                                                    .isdata = true, .index = 24 };
-        constexpr reg::cmdtm write_multiple_block = { .dir = reg::data_dir::host_to_card, .multi_blk = true,
-                                                     .rspns_type = reg::res_type::rt48, .isdata = true, .index = 25 };
     }
 
     namespace ocr {
@@ -75,23 +55,12 @@ namespace emmc {
             bool enable_1_8V {};
         };
 
-        sd(config cfg) : cfg(cfg) {}
+        explicit sd(config cfg) : cfg(cfg) {}
         sd() = default;
 
         bool init() override;
 
-        bool read(u64 address, u8* buffer, size_t size) {
-            return common_io_op(address, buffer, size, false);
-        }
-        bool write(u64 address, const u8* buffer, size_t size) {
-            return common_io_op(address, const_cast<u8*>(buffer), size, true);
-        }
-
-        bool transfer_block(u32 lba, u32* buffer, u32 num, bool write = false);
-
-    protected:
-        bool common_io_op(u64 address, u8* buffer, size_t size, bool write);
-        bool send_app_command(reg::cmdtm command, u32 arg);
+        bool parse_csd();
 
         bool voltage_switch();
         bool high_speed_switch();
@@ -99,10 +68,8 @@ namespace emmc {
         [[nodiscard]] u32 get_base_clock_rate() const override;
         [[nodiscard]] bool set_clock_rate(u32 rate) const override;
 
-        u32 rca {};
-        config cfg {};
         alignas(sizeof(reg::scr)) reg::scr scr {};
-        alignas(sizeof(u64)) u32 cid[4]{};
+        config cfg {};
         bool sdhc {};
         bool sdxc {};
         bool voltage_1_8 {};

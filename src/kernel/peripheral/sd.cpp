@@ -1,9 +1,11 @@
-#include <kernel/peripheral/sd.h>
-#include <kernel/peripheral/timer.h>
-#include <kernel/peripheral/gpio.h>
-#include <kernel/peripheral/emmc.h>
-#include <kernel/peripheral/uart1.h>
-#include <kernel/mailbox/mailbox.h>
+#include "kernel/peripheral/sd.h"
+#include "kernel/peripheral/timer.h"
+#include "kernel/peripheral/gpio.h"
+#include "kernel/peripheral/emmc.h"
+#include "kernel/peripheral/uart1.h"
+#include "kernel/mailbox/mailbox.h"
+#include "kernel/devices/sd.h"
+
 
 bool emmc::sd::init() {
     /**
@@ -23,7 +25,7 @@ bool emmc::sd::init() {
 
     uart::write("EMMC: GPIO set up\n");
 
-    device::init();
+    emmc::device::init();
 
     // set the clock rate to 400 kHz
     if (!this->set_clock_rate(clock_rate_identification)) {
@@ -88,6 +90,7 @@ bool emmc::sd::init() {
 
     // now our response should contain all the supported features of the card
     sdhc = response[0] & ocr::sdhc;
+    byte_access_mode = !sdhc; // 0 means byte access mode
     sdxc = response[0] & ocr::sdxc;
     voltage_1_8 = response[0] & ocr::voltage_1_8;
 
@@ -127,6 +130,12 @@ bool emmc::sd::init() {
     this->rca = response[0] & 0xffff0000;
 
     uart::write("EMMC: sd card rca: {:08x}\n", rca);
+
+    // parse the csd
+    if (!parse_csd()) {
+        uart::write("EMMC: failed to parse csd\n");
+        return false;
+    }
 
     // getting the rca moves the card into the stand-by state
 
@@ -191,6 +200,35 @@ bool emmc::sd::init() {
 
     // now we are ready to transfer data
 
+    return true;
+}
+
+bool emmc::sd::parse_csd() {
+    if (!send_command(cmd::send_csd, rca)) {
+        uart::write("EMMC: failed to send csd\n");
+        return false;
+    }
+
+    mem::copy(&csd, response, 4 * sizeof(u32));
+
+    u8 csd_structure = csd[0] >> 6;
+
+    // get csize field
+    u32 blocklen = csd[9] & 0xf;
+    u32 csize = 0;
+    if (!sdhc) {
+        // calculate csize
+        csize = ((u32) (csd[8] & 3) << 10) + ((u32) csd[7] << 2) + ((csd[6] & 0xc0) >> 6) + 1;
+        u32 mult = ((csd[5] & 0x3) << 1) + ((csd[4] & 0x80) >> 7) + 2;
+        csize = (csize << (mult));
+    } else {
+        csize = ((csd[8] << 16) + (csd[7] << 8) + csd[6]) + 1;
+        // multiply by 512KiB
+        csize <<= 10;
+    }
+
+    this->block_count = csize;
+    this->block_size = 1 << blocklen;
     return true;
 }
 
@@ -281,69 +319,6 @@ bool emmc::sd::high_speed_switch() {
     }
 
     return true;
-}
-
-bool emmc::sd::transfer_block(u32 lba, u32 *buffer, u32 num, bool write) {
-    // wait for data inhibit flag
-    u32 tout = 0;
-    for (; tout < 10000; ++tout) {
-        timer::wait_us(10);
-        if (!(bus->status & status::dat_inhibit)) {
-            break;
-        }
-    }
-
-    if (tout == 10000) {
-        uart::write("EMMC: timeout waiting for data inhibit\n");
-        return false;
-    }
-
-    if (!sdhc) {
-        // sdsc cards require byte addresses
-        lba *= 512;
-    }
-
-    this->blocks_to_transfer = num;
-
-    reg::cmdtm command;
-    if (write) {
-        if (num == 1) {
-            command = cmd::write_single_block;
-        } else {
-            command = cmd::write_multiple_block;
-        }
-    } else {
-        if (num == 1) {
-            command = cmd::read_single_block;
-        } else {
-            command = cmd::read_multiple_block;
-        }
-    }
-
-    this->buffer = buffer;
-
-    for (int i = 0; i < 4; i++) {
-        if (send_command(command, lba)) {
-            return true;
-        }
-    }
-
-    uart::write("EMMC: failed to transfer block\n");
-    return false;
-}
-
-bool emmc::sd::send_app_command(reg::cmdtm command, u32 arg) {
-    if (!send_command(cmd::app_cmd, rca)) {
-        uart::write("EMMC: failed to send app command\n");
-        return false;
-    }
-
-    if (rca != 0 && response[0] == 0) {
-        uart::write("EMMC: invalid app command response\n");
-        return false;
-    }
-
-    return send_command(command, arg);
 }
 
 u32 emmc::sd::get_base_clock_rate() const {
@@ -451,33 +426,5 @@ bool emmc::sd::set_clock_rate(u32 rate) const {
         uart::write("ERROR: failed to get stable clock\n");
         return false;
     }
-    return true;
-}
-
-bool emmc::sd::common_io_op(u64 address, u8 *buffer, size_t size, bool write) {
-    u32 overflow[512]; // overflow buffer
-
-    u32 first_blocks = size / block_size;
-    u32 overflow_size = size % block_size;
-
-    u32 block_address = address / block_size;
-
-    // make first transfer
-    if (!transfer_block(block_address, reinterpret_cast<u32*>(buffer), first_blocks, write)) {
-        return false;
-    }
-
-    if (overflow_size) {
-        if (write)
-            mem::copy(overflow, buffer + first_blocks, overflow_size);
-        // make second transfer
-        if (!transfer_block(block_address + first_blocks, overflow, 1, write)) {
-            return false;
-        }
-        // copy overflow to buffer
-        if (!write)
-            mem::copy(buffer + first_blocks, overflow, overflow_size);
-    }
-
     return true;
 }
