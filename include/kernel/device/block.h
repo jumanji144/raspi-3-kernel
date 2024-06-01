@@ -5,8 +5,8 @@
 namespace dev {
 
     // block device generic ioctl requests
-    constexpr dev::ioctl_cmd ioctl_get_sector_count = dev::def_ioctl("block", 0);
-    constexpr dev::ioctl_cmd ioctl_get_sector_size = dev::def_ioctl("block", 1);
+    constexpr ioctl_cmd ioctl_get_sector_count = def_ioctl("block", 0);
+    constexpr ioctl_cmd ioctl_get_sector_size = def_ioctl("block", 1);
 
     class blk_device : public device {
     public:
@@ -34,5 +34,12 @@ namespace dev {
             return 0;
         }
         virtual void seek(addr offset) {};
+
+        [[nodiscard]] u32 sector_size() {
+            return sector_size_;
+        }
+
+    protected:
+        u32 sector_size_ { 512 };
     };
 }

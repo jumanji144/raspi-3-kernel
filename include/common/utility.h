@@ -21,6 +21,23 @@ namespace util {
             return data[i];
         }
 
+        constexpr const T& operator[](size_t i) const {
+            return data[i];
+        }
+
+        [[nodiscard]] constexpr size_t size() const {
+            return N;
+        }
+
+        // iterator support
+        constexpr T* begin() {
+            return data;
+        }
+
+        constexpr T* end() {
+            return data + N;
+        }
+
         constexpr array() : data{} {}
     };
 

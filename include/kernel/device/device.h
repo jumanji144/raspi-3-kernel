@@ -1,5 +1,6 @@
 #pragma once
 #include <common.h>
+#include <common/string.h>
 
 namespace dev {
 
