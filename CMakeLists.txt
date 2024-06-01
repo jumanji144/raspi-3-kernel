@@ -22,8 +22,12 @@ add_executable(raspi
         src/kernel/peripheral/emmc.cpp
         src/kernel/peripheral/gpio.cpp
         src/kernel/peripheral/sd.cpp
-        src/kernel/devices/sd.cpp
-        src/kernel/devices/emmc.cpp
+        src/kernel/device/sd.cpp
+        src/kernel/device/emmc.cpp
+        src/kernel/device/block.cpp
+        src/kernel/partition/mbr_parser.cpp
+        src/kernel/device/disk.cpp
+
 )
 
 include_directories(include)
@@ -35,7 +39,7 @@ target_link_options(raspi PRIVATE
         -ffreestanding
         -static)
 
-target_compile_options(raspi PRIVATE -O0 -g)
+target_compile_options(raspi PRIVATE -O1 -g -Wno-address-of-packed-member)
 
 add_custom_command(
         TARGET raspi POST_BUILD

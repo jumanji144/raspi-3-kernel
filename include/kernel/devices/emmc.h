@@ -2,7 +2,7 @@
 #include <common.h>
 
 #include <kernel/peripheral/emmc.h>
-#include <kernel/device/block.h>
+#include <kernel/device/disk.h>
 
 namespace dev {
 
@@ -12,21 +12,19 @@ namespace dev {
     constexpr dev::ioctl_cmd ioctl_get_type = dev::def_ioctl("emmc", 2);
     constexpr dev::ioctl_cmd ioctl_get_csd = dev::def_ioctl("emmc", 3);
 
-    class emmc_dev : public blk_device {
+    class emmc_dev : public disk_device {
     public:
         explicit emmc_dev(emmc::device* device) : device(device) {}
+
+        bool init() override;
 
         ssize_t read(addr offset, void* buffer, size_t size) override;
         ssize_t write(addr offset, const void* buffer, size_t size) override;
 
         bool ioctl(ioctl_cmd request, void* arg) override;
 
-        [[nodiscard]] addr tell() const override;
-        void seek(addr offset) override;
-
     protected:
         ssize_t common_io_op(u64 address, u8* buffer, size_t size, bool write);
-        u64 position = 0;
         emmc::device* device;
     };
 

@@ -1,6 +1,15 @@
 #include <kernel/devices/emmc.h>
 #include "common/memory/mem.h"
 
+bool dev::emmc_dev::init() {
+    bool success = device->init();
+    if (success) {
+        this->sector_size_ = device->block_size;
+    }
+
+    return success;
+}
+
 ssize_t dev::emmc_dev::read(addr offset, void *buffer, size_t size) {
     return common_io_op(offset, static_cast<u8*>(buffer), size, false);
 }
@@ -21,8 +30,10 @@ ssize_t dev::emmc_dev::common_io_op(u64 address, u8 *buffer, size_t size, bool w
         lba /= device->block_size;
 
     // execute io operation
-    if (!device->transfer_block(lba, buf, blocks, write)) {
-        return -1;
+    if (blocks != 0) {
+        if (!device->transfer_block(lba, buf, blocks, write)) {
+            return -1;
+        }
     }
 
     // transfer overflow block
@@ -64,14 +75,6 @@ bool dev::emmc_dev::ioctl(dev::ioctl_cmd request, void *arg) {
             mem::copy(arg, device->csd, 16);
             return true;
         default:
-            return false;
+            return disk_device::ioctl(request, arg);
     }
-}
-
-addr dev::emmc_dev::tell() const {
-    return position;
-}
-
-void dev::emmc_dev::seek(addr offset) {
-    position = offset;
 }

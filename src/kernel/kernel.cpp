@@ -4,6 +4,7 @@
 #include <kernel/gpu/buffer.h>
 #include <kernel/peripheral/sd.h>
 #include "kernel/devices/sd.h"
+#include "kernel/block/part/table.h"
 
 void print_board_info() {
     mailbox::property_message<board::serial_request, board::firmware_revision_request, board::board_model_request,
@@ -49,26 +50,34 @@ extern "C" void kernel_main(u64 dtb_ptr32)
         .enable_1_8V = true
     });
 
-    if (sd.init()) {
-        uart::write("SD card initialized\n");
-    } else {
+    dev::sd_dev dev(sd);
+
+    if (!dev.init()) {
         uart::write("Failed to initialize SD card\n");
         return;
     }
-
-    u8 buf[512];
-
-    dev::sd_dev dev(sd);
 
     u32 block_size = 0;
     u32 total_blocks = 0;
     dev.ioctl(dev::ioctl_get_sector_size, &block_size);
     dev.ioctl(dev::ioctl_get_sector_count, &total_blocks);
 
-    u64 size = block_size * total_blocks;
+    u64 size = (u64)block_size * total_blocks;
 
     uart::write("SD card size: {}MB\n", size / 1024 / 1024);
 
+    dev.ioctl(dev::ioctl_rescan_partitions, nullptr);
+
+    auto part = dev.primary();
+
+    u8 buf[512];
+    part.read(0, buf, 512);
+
+    for (size_t i = 0; i < 512; i++) {
+        if (i % 16 == 0)
+            uart::write("\n");
+        uart::write("{:02x} ", buf[i]);
+    }
 
     return;
 }
