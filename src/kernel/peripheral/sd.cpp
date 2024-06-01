@@ -222,9 +222,9 @@ bool emmc::sd::parse_csd() {
         u32 mult = ((csd[5] & 0x3) << 1) + ((csd[4] & 0x80) >> 7) + 2;
         csize = (csize << (mult));
     } else {
-        csize = ((csd[8] << 16) + (csd[7] << 8) + csd[6]) + 1;
-        // multiply by 512KiB
-        csize <<= 10;
+        csize = ((u32)(csd[7] << 16) + (u32)(csd[6] << 8) + csd[5]) + 1;
+        // multiply by KiB
+        csize *= (1 << 10);
     }
 
     this->block_count = csize;
